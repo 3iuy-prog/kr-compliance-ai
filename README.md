@@ -7,7 +7,7 @@
 
 ---
 
-## 아키텍처 (한눈에)
+## 구조
 
 ```mermaid
 flowchart TB
@@ -30,7 +30,7 @@ flowchart TB
 
 ---
 
-## 사용 절차 (처음 쓰는 분용)
+## 사용 방법
 
 ### STEP 0. 요구사항
 - Python 3.10+ / Git / [Claude Code](https://claude.com/claude-code) CLI
