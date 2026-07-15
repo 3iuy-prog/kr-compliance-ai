@@ -38,7 +38,7 @@ flowchart TB
 
 ### STEP 1. 저장소 준비
 ```bash
-git clone <이 저장소> compliance-ai && cd compliance-ai
+git clone https://github.com/3iuy-prog/kr-compliance-ai compliance-ai && cd compliance-ai
 python3 -m pip install --user -r requirements.txt      # pypdf (RAG용)
 ```
 
