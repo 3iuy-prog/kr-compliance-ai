@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "korean-law": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.gomdori.app/law?oc=${LAW_OC}"]
+    }
+  }
+}

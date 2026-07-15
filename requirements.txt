@@ -1,0 +1,9 @@
+# 로컬 도구 의존성 (최소)
+# legalize.py / crossmap.py 는 순수 stdlib — 설치 불필요.
+# rag.py 는 PDF 처리 시에만 pypdf 필요 (txt/md는 불필요).
+
+pypdf>=6.0        # PDF 텍스트 추출 (RAG ingest)
+
+# 선택(임베딩 백엔드 교체 시):
+# sentence-transformers   # 로컬 임베딩(BGE-m3 등). rag.py embed() 교체
+# numpy                   # 대규모 인덱스 가속(기본은 순수 python)

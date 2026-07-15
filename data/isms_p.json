@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "title": "ISMS-P 인증기준 정형화 (L3)",
+    "desc": "정보보호 및 개인정보보호 관리체계 인증기준. 크로스매핑(P2)의 통제 축.",
+    "version": "ISMS-P 인증기준 안내서 기준 (2023.11 / 101개 체계)",
+    "structure": "1영역 관리체계 수립·운영(16) + 2영역 보호대책 요구사항(64) + 3영역 개인정보 처리단계별 요구사항(21) = 101",
+    "source": [
+      "https://www.privacy.go.kr/front/contents/cntntsView.do?contsNo=59",
+      "https://www.data.go.kr/data/15105394/fileData.do (개인정보위 인증기준 안내서 20231130)"
+    ],
+    "verified_rule": "verified=true = 위 권위 출처로 항목ID·명칭 대조 완료. 세부 확인사항 원문은 KISA 안내서 PDF 수집 후 채움(현재 미포함).",
+    "note": "본 파일은 우리가 사용하는 접근통제/인증/암호화/로그 축 위주 시드. 전체 101개는 안내서 PDF 인그레스트로 확장.",
+    "updated": "2026-07-15"
+  },
+  "domains": [
+    {"id": "1", "name": "관리체계 수립 및 운영", "count": 16},
+    {"id": "2", "name": "보호대책 요구사항", "count": 64},
+    {"id": "3", "name": "개인정보 처리단계별 요구사항", "count": 21}
+  ],
+  "categories": [
+    {"id": "2.1", "name": "정책, 조직, 자산 관리", "verified": true},
+    {"id": "2.2", "name": "인적 보안", "verified": true},
+    {"id": "2.3", "name": "외부자 보안", "verified": true},
+    {"id": "2.4", "name": "물리 보안", "verified": true},
+    {"id": "2.5", "name": "인증 및 권한 관리", "verified": true},
+    {"id": "2.6", "name": "접근 통제", "verified": true},
+    {"id": "2.7", "name": "암호화 적용", "verified": true},
+    {"id": "2.8", "name": "정보시스템 도입 및 개발 보안", "verified": true},
+    {"id": "2.9", "name": "시스템 및 서비스 운영관리", "verified": true},
+    {"id": "2.10", "name": "시스템 및 서비스 보안관리", "verified": true},
+    {"id": "2.11", "name": "사고 예방 및 대응", "verified": true},
+    {"id": "2.12", "name": "재해복구", "verified": true}
+  ],
+  "controls": [
+    {"id": "2.5.1", "name": "사용자 계정 관리", "category": "2.5", "verified": true},
+    {"id": "2.5.2", "name": "사용자 식별", "category": "2.5", "verified": true},
+    {"id": "2.5.3", "name": "사용자 인증", "category": "2.5", "verified": true},
+    {"id": "2.5.4", "name": "비밀번호 관리", "category": "2.5", "verified": true},
+    {"id": "2.5.5", "name": "특수 계정 및 권한 관리", "category": "2.5", "verified": true},
+    {"id": "2.5.6", "name": "접근권한 검토", "category": "2.5", "verified": true},
+    {"id": "2.6.1", "name": "네트워크 접근", "category": "2.6", "verified": true},
+    {"id": "2.6.2", "name": "정보시스템 접근", "category": "2.6", "verified": true},
+    {"id": "2.6.3", "name": "응용프로그램 접근", "category": "2.6", "verified": true},
+    {"id": "2.6.4", "name": "데이터베이스 접근", "category": "2.6", "verified": true},
+    {"id": "2.6.5", "name": "무선 네트워크 접근", "category": "2.6", "verified": true},
+    {"id": "2.6.6", "name": "원격접근 통제", "category": "2.6", "verified": true},
+    {"id": "2.6.7", "name": "인터넷 접속 통제", "category": "2.6", "verified": true},
+    {"id": "2.7.1", "name": "암호정책 적용", "category": "2.7", "verified": false},
+    {"id": "2.7.2", "name": "암호키 관리", "category": "2.7", "verified": false},
+    {"id": "2.9.4", "name": "로그 및 접속기록 관리", "category": "2.9", "verified": false},
+    {"id": "2.9.5", "name": "로그 및 접속기록 점검", "category": "2.9", "verified": false}
+  ]
+}

@@ -1,0 +1,31 @@
+# 환경변수 / 시크릿
+.env
+.env.*
+*.key
+
+# 법제처 API 키가 들어갈 수 있는 로컬 설정
+.mcp.local.json
+
+# 의존성
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 벡터DB / 로컬 데이터 캐시
+.chroma/
+*.sqlite
+data/cache/
+
+# RAG 지식베이스(인덱스·원본 PDF, 재생성 가능·대용량)
+data/kb/
+data/kb_src/
+
+# legalize-kr 서브클론 (필요 시 별도 clone)
+vendor/legalize-kr/
+
+# OS / 에디터
+.DS_Store
+.idea/
+*.log
