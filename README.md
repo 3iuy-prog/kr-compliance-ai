@@ -87,11 +87,11 @@ flowchart LR
 답변에 필요한 안내서·점검기준이 없으면 PDF를 흡수시키면 됩니다.
 ```bash
 # URL에서 바로 (공식 출처 권장)
-python tools/kb_add.py "<PDF_URL>" --collection <이름> --name <파일명.pdf>
+python3 tools/kb_add.py "<PDF_URL>" --collection <이름> --name <파일명.pdf>
 # 로컬 PDF는 직접 인그레스트
-python tools/rag.py ingest <파일.pdf> --collection <이름>
+python3 tools/rag.py ingest <파일.pdf> --collection <이름>
 # 검색 확인
-python tools/rag.py search "<질의>" --collection <이름> -k 5
+python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 ```
 > ⚠️ **최신 개정 반영본**인지 반드시 확인해 주세요(연도만 보고 옛 버전을 넣지 않도록 주의). 상세는 [docs/05-rag.md](docs/05-rag.md)를 참고해 주세요.
 
@@ -101,10 +101,10 @@ python tools/rag.py search "<질의>" --collection <이름> -k 5
 
 | 도구 | 용도 | 예시 |
 |---|---|---|
-| [tools/legalize.py](tools/legalize.py) | 법령 조회·개정이력·diff | `python tools/legalize.py show 개인정보보호법 --jo 29 --as-of 2026-07-16` |
-| [tools/crossmap.py](tools/crossmap.py) | 통제↔법령 크로스매핑 | `python tools/crossmap.py by-law 개인정보보호법 --jo 29` |
-| [tools/rag.py](tools/rag.py) | PDF 지식베이스 검색 | `python tools/rag.py search "접속기록 보관" --collection isms` |
-| [tools/kb_add.py](tools/kb_add.py) | URL→다운로드→인그레스트 | `python tools/kb_add.py "<url>" --collection fsec` |
+| [tools/legalize.py](tools/legalize.py) | 법령 조회·개정이력·diff | `python3 tools/legalize.py show 개인정보보호법 --jo 29 --as-of 2026-07-16` |
+| [tools/crossmap.py](tools/crossmap.py) | 통제↔법령 크로스매핑 | `python3 tools/crossmap.py by-law 개인정보보호법 --jo 29` |
+| [tools/rag.py](tools/rag.py) | PDF 지식베이스 검색 | `python3 tools/rag.py search "접속기록 보관" --collection isms` |
+| [tools/kb_add.py](tools/kb_add.py) | URL→다운로드→인그레스트 | `python3 tools/kb_add.py "<url>" --collection fsec` |
 
 - `legalize.py`는 최신 공포본이 아직 시행 전이면 **⚠️ 시행예정본 경고**를 냅니다. 오늘 현행본은 `--as-of <오늘>`로 조회해 주세요.
 - `crossmap.py validate`로 매핑의 ISMS-P 코드 정합성을 자동 검사할 수 있습니다.

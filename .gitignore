@@ -29,3 +29,9 @@ vendor/legalize-kr/
 .DS_Store
 .idea/
 *.log
+
+.claude-cache/
+.claude/skills/*
+!.claude/skills/legal-answer/
+
+presentation/

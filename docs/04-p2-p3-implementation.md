@@ -10,12 +10,12 @@
   - [data/isms_p.json](../data/isms_p.json) — **L3 정형화**: ISMS-P 인증기준(도메인 3영역, 카테고리 2.1~2.12, 통제 시드 17). 항목ID·명칭은 권위출처(개인정보위/data.go.kr) 대조.
 - 조회: [tools/crossmap.py](../tools/crossmap.py)
   ```bash
-  python tools/crossmap.py list                       # 전체 매핑
-  python tools/crossmap.py lookup 2.6.1               # ISMS-P 코드 조회
-  python tools/crossmap.py search 암호화               # 키워드
-  python tools/crossmap.py by-law 개인정보보호법 --jo 29  # 역매핑(이 조항에 걸리는 통제)
-  python tools/crossmap.py isms 2.6                    # L3 ISMS-P 항목 조회
-  python tools/crossmap.py validate                   # crossmap↔isms_p 정합성(코드 지어내기 방지)
+  python3 tools/crossmap.py list                       # 전체 매핑
+  python3 tools/crossmap.py lookup 2.6.1               # ISMS-P 코드 조회
+  python3 tools/crossmap.py search 암호화               # 키워드
+  python3 tools/crossmap.py by-law 개인정보보호법 --jo 29  # 역매핑(이 조항에 걸리는 통제)
+  python3 tools/crossmap.py isms 2.6                    # L3 ISMS-P 항목 조회
+  python3 tools/crossmap.py validate                   # crossmap↔isms_p 정합성(코드 지어내기 방지)
   ```
 - **L3 상세(주요 확인사항·결함사례)는 미포함** → 개인정보위 ISMS-P 인증기준 안내서 PDF 인그레스트 필요(P4 셀프진단 정확도용). 항목 목록·매핑에는 현재 시드로 충분.
 - **검증 규약**: `law`의 `verified:true` 조항은 legalize.py로 원문 대조 완료(✅).
@@ -30,8 +30,8 @@
 
 - 엔진: [tools/legalize.py](../tools/legalize.py) `analyze` (Git blob 비교, 외부의존 없음)
   ```bash
-  python tools/legalize.py history 개인정보보호법                  # 개정일 확인
-  python tools/legalize.py analyze 개인정보보호법 --at 2023-03-14 --detail 5
+  python3 tools/legalize.py history 개인정보보호법                  # 개정일 확인
+  python3 tools/legalize.py analyze 개인정보보호법 --at 2023-03-14 --detail 5
   # → 신설 19 · 삭제 9 · 개정 52, 조문 목록 + 신설 조항 상세
   ```
 - 파이프라인(스킬 AMENDMENT): `history` → `analyze` → crossmap 역매핑으로 영향 통제 도출 → 대응 체크리스트.

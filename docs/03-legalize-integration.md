@@ -34,12 +34,12 @@ git clone https://github.com/legalize-kr/legalize-kr vendor/legalize-kr   # 약 
 외부 의존 없음(Python stdlib + git).
 
 ```bash
-python tools/legalize.py list                          # 대상 법률 + 시행일/상태
-python tools/legalize.py show 개인정보보호법 --jo 21     # 특정 조문 원문 추출
-python tools/legalize.py show 전자금융거래법 --kind 시행령
-python tools/legalize.py history 개인정보보호법          # 개정이력(커밋=개정)
-python tools/legalize.py diff 개인정보보호법 --at 2023-03-14   # 해당 개정 변경분
-python tools/legalize.py diff 개인정보보호법             # 최근 두 개정 비교
+python3 tools/legalize.py list                          # 대상 법률 + 시행일/상태
+python3 tools/legalize.py show 개인정보보호법 --jo 21     # 특정 조문 원문 추출
+python3 tools/legalize.py show 전자금융거래법 --kind 시행령
+python3 tools/legalize.py history 개인정보보호법          # 개정이력(커밋=개정)
+python3 tools/legalize.py diff 개인정보보호법 --at 2023-03-14   # 해당 개정 변경분
+python3 tools/legalize.py diff 개인정보보호법             # 최근 두 개정 비교
 ```
 
 기능: `list`(대상 목록) · `show`(법령/조문, frontmatter 시행일 포함) · `history`(개정 목록) · `diff`(개정 변경분).

@@ -12,17 +12,17 @@
 ## 사용
 ```bash
 python3 -m pip install --user pypdf          # PDF 처리 시 1회
-python tools/rag.py ingest <파일...> --collection isms   # 로컬 pdf/txt/md
-python tools/rag.py search "접속기록 보관 기간" --collection isms -k 5
-python tools/rag.py list
-python tools/rag.py drop --collection isms
+python3 tools/rag.py ingest <파일...> --collection isms   # 로컬 pdf/txt/md
+python3 tools/rag.py search "접속기록 보관 기간" --collection isms -k 5
+python3 tools/rag.py list
+python3 tools/rag.py drop --collection isms
 ```
 - HWP는 미지원 → 텍스트/PDF로 변환 후 투입.
 
 ## URL에서 바로 확보: kb_add ([tools/kb_add.py](../tools/kb_add.py))
 웹에서 찾은 가이드/고시 PDF를 다운로드+인그레스트 한 번에. discover→ingest→answer 루프의 중간 단계.
 ```bash
-python tools/kb_add.py <PDF_URL> --collection sec_measures --name 안내서.pdf
+python3 tools/kb_add.py <PDF_URL> --collection sec_measures --name 안내서.pdf
 ```
 - 공식 도메인(law.go.kr·kisa.or.kr·fsec.or.kr·pipc.go.kr·data.go.kr 등) 화이트리스트, 그 외는 경고.
 - PDF 시그니처 검사(HTML 오류페이지 감지). 저장은 `data/kb_src/`(.gitignore).
