@@ -34,6 +34,7 @@ flowchart TB
 
 ### STEP 0. 요구사항
 - Python 3.10+ / Git / [Claude Code](https://claude.com/claude-code) CLI
+- Node.js 18+ (`npx`) — 법령 MCP 서버 로컬 실행용 (STEP 3)
 - (선택) 법제처 Open API 인증키 — MCP 실시간 조회용
 
 ### STEP 1. 저장소 준비
@@ -48,6 +49,7 @@ python3 -m pip install --user -r requirements.txt      # pypdf (RAG용)
 git clone https://github.com/legalize-kr/legalize-kr vendor/legalize-kr
 ```
 > `vendor/`는 용량이 커서 커밋되지 않습니다. 각자 clone 해 주세요.
+> 이후 최신화는 자동입니다 — `legalize.py`가 실행할 때마다 원격 최신 여부를 확인해 맞춥니다(하루 1회, 즉시 갱신은 `python3 tools/legalize.py sync`).
 
 ### STEP 3. 법령 MCP 연결 (실시간 원문 조회)
 1. [법제처 Open API](https://open.law.go.kr/LSO/openApi/guideList.do)에서 회원가입 후 인증키(OC)를 발급받습니다.
@@ -62,6 +64,7 @@ git clone https://github.com/legalize-kr/legalize-kr vendor/legalize-kr
    # 프롬프트에서 korean-law 서버 승인
    claude mcp list      # korean-law 가 ✓ 인지 확인
    ```
+   MCP 서버를 따로 띄울 필요는 없습니다 — `claude`가 [.mcp.json](.mcp.json)을 읽어 `npx`로 로컬에서 자동 실행·종료합니다(그래서 Node.js 필요).
 > MCP 없이도 STEP 2의 `legalize.py`로 대상 5법 조회는 가능합니다. MCP는 별표·판례·행정규칙 등 커버리지를 넓혀 줍니다. 설정 상세는 [docs/02-mcp-setup.md](docs/02-mcp-setup.md)를 참고해 주세요.
 
 ### STEP 4. 질문하기 (기본 사용)
@@ -107,6 +110,7 @@ python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 | [tools/kb_add.py](tools/kb_add.py) | URL→다운로드→인그레스트 | `python3 tools/kb_add.py "<url>" --collection fsec` |
 
 - `legalize.py`는 최신 공포본이 아직 시행 전이면 **⚠️ 시행예정본 경고**를 냅니다. 오늘 현행본은 `--as-of <오늘>`로 조회해 주세요.
+- `legalize.py`는 실행 시 vendor 저장소를 자동으로 최신화합니다(하루 1회 확인, 생략은 `--no-sync`, 즉시 갱신은 `sync`).
 - `crossmap.py validate`로 매핑의 ISMS-P 코드 정합성을 자동 검사할 수 있습니다.
 
 ---

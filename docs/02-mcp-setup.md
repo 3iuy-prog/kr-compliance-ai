@@ -18,8 +18,9 @@ MCP는 법제처 Open API 인증키(`OC`)가 필요하다. **직접 발급해야
    ```
 
    > `~/.zshrc` 등 전역 프로필에 넣지 말 것 — 무관한 프로젝트까지 노출된다.
-   > `.env`만으로는 부족하다: Claude Code는 `.env`를 자동으로 읽지 않으므로
-   > `${LAW_OC}` 치환이 안 되고 `Missing environment variables: LAW_OC` 경고가 뜬다.
+   > `.env`만으로는 부족할 수 있다: MCP 서버는 **Claude Code 프로세스의 환경변수를 상속**받는다.
+   > `source .env` 한 셸에서 `claude`를 실행하면 전달되지만, IDE/데스크톱 앱처럼 셸 밖에서
+   > 실행하는 경우를 위해 `settings.local.json`의 `env` 블록에도 넣어 둔다.
 
 ## 연결 방법
 
@@ -32,8 +33,7 @@ MCP는 법제처 Open API 인증키(`OC`)가 필요하다. **직접 발급해야
   "mcpServers": {
     "korean-law": {
       "command": "npx",
-      "args": ["-y", "korean-law-mcp@latest"],
-      "env": { "LAW_OC": "${LAW_OC}" }
+      "args": ["-y", "korean-law-mcp@latest"]
     }
   }
 }
@@ -41,6 +41,8 @@ MCP는 법제처 Open API 인증키(`OC`)가 필요하다. **직접 발급해야
 
 - 항상 npm 최신판(`@latest`) 사용 — 호스팅판보다 릴리스 반영이 빠르다.
 - 중계 서버를 거치지 않아 호스트 장애와 무관하게 동작한다.
+- OC 키는 `.mcp.json`에 넣지 않는다 — 서버가 프로세스 환경변수(`LAW_OC`)를 상속받는다(위 사전 준비 참고).
+  `"env": { "LAW_OC": "${LAW_OC}" }` 치환식은 변수가 없으면 `Missing environment variables` 경고를 내므로 쓰지 않는다.
 - 확인: `claude mcp list` → `korean-law … ✔ Connected`
 
 ### 방법 B — 호스팅 원격 (비권장, 장애 이력)
@@ -72,7 +74,7 @@ MCP는 법제처 Open API 인증키(`OC`)가 필요하다. **직접 발급해야
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| `Missing environment variables: LAW_OC` 경고 + 검색 결과 링크에 `OC=${LAW_OC}` 리터럴 | Claude Code 프로세스 환경에 `LAW_OC` 없음 (`.env`는 자동 로드되지 않음) | `.claude/settings.local.json`의 `env` 블록에 키 추가 후 재시작 |
+| MCP 도구가 인증 오류로 실패 (또는 구식 `${LAW_OC}` 치환 구성 사용 시 `Missing environment variables: LAW_OC` 경고) | Claude Code 프로세스 환경에 `LAW_OC` 없음 (`.env`는 자동 로드되지 않음) | `.claude/settings.local.json`의 `env` 블록에 키 추가 후 재시작, 또는 `source .env` 한 셸에서 `claude` 실행 |
 | `get_decision_text` → `EXTERNAL_API_ERROR: precedent iframe did not include taxlaw redirect location (HTTP 200)` | 1차 JSON 경로 실패 시 taxlaw(국세) 리다이렉트 전제의 HTML 폴백으로 빠지는데, 비조세 판례는 리다이렉트가 없어 항상 실패. 방아쇠는 대개 무효한 OC | OC 유효성부터 확인(아래), 폴백 자체는 업스트림 버그 |
 | `사용자 정보 검증에 실패하였습니다` (법제처 응답) | OC 값이 무효 | `curl "https://www.law.go.kr/DRF/lawService.do?OC=$LAW_OC&target=prec&ID=237875&type=JSON"` 으로 단독 검증 — `PrecService` JSON이 나와야 정상 |
 | 원격(방법 B)만 전면 실패, `SocketError: other side closed` / 502 | 호스트 다운 | 방법 A(로컬 stdio)로 전환 |
