@@ -14,6 +14,12 @@ git clone https://github.com/legalize-kr/legalize-kr vendor/legalize-kr   # 약 
 ```
 `vendor/legalize-kr/`는 [.gitignore](../.gitignore)로 제외(용량). 각자 clone.
 
+## 최신본 자동 동기화
+[tools/legalize.py](../tools/legalize.py)는 매 실행 시 원격(origin) 최신 여부를 확인하고 뒤처져 있으면 자동으로 맞춘다.
+- 확인은 **하루 1회**로 제한(`.git/FETCH_HEAD` mtime 기준). 즉시 갱신은 `python3 tools/legalize.py sync`, 생략은 `--no-sync`.
+- 업스트림이 이력 백필로 **force-push**되는 경우가 있어 pull 대신 `fetch + reset --hard`를 쓴다. 따라서 갱신 후 과거 커밋 해시가 달라질 수 있다(`history`/`diff` 결과의 해시를 영구 참조로 쓰지 말 것).
+- vendor 저장소에 로컬 수정이 있으면 자동 동기화를 건너뛰고 경고만 낸다. 오프라인이면 경고 후 로컬본으로 진행.
+
 ## 저장소 구조
 - 경로: `kr/{법령명}/{구분}.md` (법령명은 공백 제거, 예: `정보통신망이용촉진및정보보호등에관한법률`)
 - 구분: `법률.md` / `시행령.md` / `시행규칙.md` (시행세칙·고시는 없음 → MCP 담당)

@@ -11,9 +11,14 @@
   python tools/legalize.py show 개인정보보호법 --as-of 2026-07-16   # 그날 시행 중이던 현행본
   python tools/legalize.py history 개인정보보호법
   python tools/legalize.py diff 개인정보보호법 --at 2023-03-14   # 해당 개정 커밋의 변경분
+  python tools/legalize.py sync                                  # 원격 최신본으로 즉시 동기화
 
 주의: 기본 show는 최신 '공포'본(HEAD)을 보여준다. 시행일이 미래면 '⚠️ 시행예정본' 경고가 뜨며,
       오늘 현행을 원하면 --as-of <오늘> 을 쓴다. (공포 != 시행)
+
+동기화: 매 실행 시 원격(origin) 최신 여부를 확인하고 뒤처져 있으면 자동으로 맞춘다
+      (확인은 하루 1회로 제한, --no-sync 로 생략 가능). legalize-kr은 이력 백필로
+      force-push되는 경우가 있어 pull 대신 fetch + reset --hard 를 쓴다.
 """
 from __future__ import annotations
 import argparse
@@ -21,11 +26,13 @@ import datetime
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 TODAY = datetime.date.today().isoformat()
 
 REPO = Path(__file__).resolve().parent.parent / "vendor" / "legalize-kr"
+FETCH_TTL_HOURS = 24  # 원격 확인 최소 간격
 
 # 대상 법률: 친숙한 별칭 → legalize-kr 디렉토리명(공백 제거)
 LAWS = {
@@ -64,6 +71,56 @@ def git(*args: str) -> str:
         ["git", "-C", str(REPO), *args],
         capture_output=True, text=True, check=True,
     ).stdout
+
+
+def _git_try(*args: str, timeout: int | None = None) -> subprocess.CompletedProcess:
+    """실패해도 예외를 던지지 않는 git 실행 (동기화 전용)."""
+    return subprocess.run(
+        ["git", "-C", str(REPO), *args],
+        capture_output=True, text=True, timeout=timeout,
+    )
+
+
+def _remote_ref() -> str:
+    r = _git_try("symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "origin/main"
+
+
+def sync(force: bool = False) -> None:
+    """원격 최신본으로 자동 동기화. 오프라인이면 경고 후 로컬본으로 진행.
+
+    force-push(이력 재작성)에도 대응해야 하므로 fetch + reset --hard 를 쓰되,
+    vendor 저장소에 로컬 수정이 있으면 건드리지 않는다.
+    상태 메시지는 stdout 파싱을 깨지 않도록 stderr로 낸다.
+    """
+    fetch_head = REPO / ".git" / "FETCH_HEAD"
+    if not force and fetch_head.exists():
+        if time.time() - fetch_head.stat().st_mtime < FETCH_TTL_HOURS * 3600:
+            return  # 최근에 확인함
+    try:
+        r = _git_try("fetch", "origin", timeout=60)
+    except subprocess.TimeoutExpired:
+        print("⚠️ legalize-kr fetch 시간 초과 — 로컬본으로 진행", file=sys.stderr)
+        return
+    if r.returncode != 0:
+        print("⚠️ legalize-kr fetch 실패(오프라인?) — 로컬본으로 진행", file=sys.stderr)
+        return
+    remote = _remote_ref()
+    local = _git_try("rev-parse", "HEAD").stdout.strip()
+    target = _git_try("rev-parse", remote).stdout.strip()
+    if not target or local == target:
+        return
+    if _git_try("status", "--porcelain").stdout.strip():
+        print("⚠️ vendor/legalize-kr에 로컬 수정이 있어 자동 동기화 건너뜀 "
+              "(수정을 치우고 `legalize.py sync` 실행)", file=sys.stderr)
+        return
+    old = _git_try("log", "-1", "--format=%h %cs").stdout.strip()
+    r = _git_try("reset", "--hard", remote)
+    if r.returncode == 0:
+        new = _git_try("log", "-1", "--format=%h %cs").stdout.strip()
+        print(f"🔄 legalize-kr 최신본 동기화: {old} → {new}", file=sys.stderr)
+    else:
+        print(f"⚠️ legalize-kr 동기화 실패: {r.stderr.strip()}", file=sys.stderr)
 
 
 def frontmatter(text: str) -> dict:
@@ -223,6 +280,12 @@ def cmd_show(a):
         print(body[: a.limit] + ("\n…(생략)" if len(body) > a.limit else ""))
 
 
+def cmd_sync(_):
+    sync(force=True)
+    head = _git_try("log", "-1", "--format=%h %cs %s").stdout.strip()
+    print(f"현재 legalize-kr HEAD: {head}")
+
+
 def cmd_history(a):
     p = law_path(a.name, a.kind)
     rel = p.relative_to(REPO)
@@ -256,9 +319,13 @@ def main():
         raise SystemExit(f"❌ vendor/legalize-kr 없음. 먼저 clone 필요:\n"
                          f"   git clone https://github.com/legalize-kr/legalize-kr {REPO}")
     ap = argparse.ArgumentParser(description="legalize-kr 연동 헬퍼")
+    ap.add_argument("--no-sync", action="store_true",
+                    help="원격 최신 여부 확인 생략 (오프라인/속도 우선 시)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("list", help="대상 법률 목록").set_defaults(func=cmd_list)
+
+    sub.add_parser("sync", help="원격 최신본으로 즉시 동기화").set_defaults(func=cmd_sync)
 
     s = sub.add_parser("show", help="법령/조문 조회")
     s.add_argument("name"); s.add_argument("--kind", default="법률", choices=KINDS)
@@ -284,6 +351,8 @@ def main():
     s.set_defaults(func=cmd_analyze)
 
     a = ap.parse_args()
+    if a.cmd != "sync" and not a.no_sync:
+        sync()
     a.func(a)
 
 
