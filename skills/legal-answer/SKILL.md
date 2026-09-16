@@ -7,6 +7,17 @@ description: 법률/컴플라이언스 질의에 표준 형식으로 답한다. 
 
 모든 법률/규제 답변을 일관된 근거 기반 형식으로 표준화한다.
 
+## 도구 위치 (cwd 무관)
+
+이 스킬은 홈(`~/.claude/skills/legal-answer` → 저장소 `skills/legal-answer` 심볼릭 링크)에 등록돼 어느 디렉터리에서든 쓰인다.
+로컬 도구(`legalize.py` `crossmap.py` `rag.py` `kb_add.py`)는 ai-a3sc 저장소에 있고 `__file__` 기준으로 데이터를 찾으므로 **어디서 실행하든 절대경로로 호출**하면 된다.
+
+- 저장소 루트 = 환경변수 `COMPLIANCE_AI_HOME`. 미설정이면 `$HOME/workspace/ai-a3sc`.
+- Bash 호출 간 셸 변수가 유지되지 않으므로 **도구 명령마다 앞에** 다음을 붙인다:
+  `COMPLIANCE_AI_HOME="${COMPLIANCE_AI_HOME:-$HOME/workspace/ai-a3sc}"; python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" show 개인정보보호법 --jo 29`
+- 아래 본문의 `python3 "$COMPLIANCE_AI_HOME/tools/…"` 표기는 모두 이 프리픽스를 전제로 한다.
+- 저장소 경로가 없으면 로컬 도구 대신 법령 MCP만 쓰고, 그것도 없으면 "미확인".
+
 ## 실행 절차
 
 1. **의도 분류** — 질의를 4개 중 하나로 라우팅:
@@ -17,16 +28,16 @@ description: 법률/컴플라이언스 질의에 표준 형식으로 답한다. 
 
 2. **원문 조회 (필수)** — 답하기 전 근거를 실제로 조회한다. 기억으로 조문을 쓰지 않는다.
    - L1 법령 / L2 행정규칙: 법령 MCP(`korean-law-mcp`)로 조·항·호 조회. MCP 없으면 아래 로컬 도구 사용.
-   - **로컬 대안(법령 원문)**: `python3 tools/legalize.py show <법령> --jo <N>` (대상 5법). MCP·legalize 둘 다 없으면 "미확인".
-   - L3 인증기준/점검항목: 정형화 데이터 `python3 tools/crossmap.py isms <코드>` +
-     원문 상세는 RAG `python3 tools/rag.py search "<질의>" --collection <isms 등> -k 5`.
+   - **로컬 대안(법령 원문)**: `python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" show <법령> --jo <N>` (대상 5법). MCP·legalize 둘 다 없으면 "미확인".
+   - L3 인증기준/점검항목: 정형화 데이터 `python3 "$COMPLIANCE_AI_HOME/tools/crossmap.py" isms <코드>` +
+     원문 상세는 RAG `python3 "$COMPLIANCE_AI_HOME/tools/rag.py" search "<질의>" --collection <isms 등> -k 5`.
    - 조회 실패 시 → 해당 부분을 **"미확인"**으로 표기하고 단정하지 않는다.
 
 ### 의도별 도구 호출 (필수)
-- **MAPPING** → `python3 tools/crossmap.py lookup <ISMS코드>` 또는 `search <키워드>` 또는 `by-law <법령> --jo <N>`.
+- **MAPPING** → `python3 "$COMPLIANCE_AI_HOME/tools/crossmap.py" lookup <ISMS코드>` 또는 `search <키워드>` 또는 `by-law <법령> --jo <N>`.
   결과의 법령 조항 중 `✅`는 검증됨, `⚠️`(고시/ISMS-P 조번호)는 답변에서 "미검증"으로 표기하고 가능하면 MCP로 재확인.
-- **AMENDMENT** → `python3 tools/legalize.py history <법령>` 로 개정일 확인 후
-  `python3 tools/legalize.py analyze <법령> --at <YYYY-MM-DD> --detail 5` 로 신설/삭제/개정 조문 구조를 받아
+- **AMENDMENT** → `python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" history <법령>` 로 개정일 확인 후
+  `python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" analyze <법령> --at <YYYY-MM-DD> --detail 5` 로 신설/삭제/개정 조문 구조를 받아
   "변경 요약 + 영향 통제항목(crossmap 역매핑) + 대응 체크리스트"로 가공한다.
   ⚠️ `analyze`는 **조(條) 단위**만 반환한다. 항(項)·호(號) 번호를 answer에 쓰려면 그 조문 원문을 실제로 조회한 뒤에만. analyze를 항 번호의 근거로 표기하지 말 것.
 - **DIAGNOSIS** → `rag.py search`로 업로드 문서 관련 인증기준 원문(주요 확인사항·결함사례) 검색 + crossmap으로 통제 매칭 후 gap 정리.
@@ -36,8 +47,8 @@ description: 법률/컴플라이언스 질의에 표준 형식으로 답한다. 
 질의 관련 가이드라인·고시 해설서가 어느 컬렉션에도 없으면 직접 확보 후 답한다:
 1. **검색** — 웹검색으로 공식 출처(개인정보위·KISA·금융보안원·법제처)의 **최신본** PDF를 찾는다.
    ⚠️ **반드시 최신 개정 반영본**인지 확인(예: 안전성확보조치는 2025-10-31 시행 개정 → 2025.11 안내서). 연도만 보고 옛 버전 넣지 말 것.
-2. **확보** — `python3 tools/kb_add.py <PDF_URL> --collection <이름> --name <파일명>` (다운로드+인그레스트 한 번에)
-3. **검색·답변** — `python3 tools/rag.py search "<질의>" --collection <이름> -k 5` 결과를 근거로 표준 골격 답변. 출처·페이지 표기.
+2. **확보** — `python3 "$COMPLIANCE_AI_HOME/tools/kb_add.py" <PDF_URL> --collection <이름> --name <파일명>` (다운로드+인그레스트 한 번에)
+3. **검색·답변** — `python3 "$COMPLIANCE_AI_HOME/tools/rag.py" search "<질의>" --collection <이름> -k 5` 결과를 근거로 표준 골격 답변. 출처·페이지 표기.
 4. 비공식 도메인 경고가 뜨면 원문 정본 여부를 확인하고, 규범적 단정은 신중히.
 
 ### ⏱ 시행일 처리 (필수)

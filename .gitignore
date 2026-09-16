@@ -32,6 +32,5 @@ vendor/legalize-kr/
 
 .claude-cache/
 .claude/skills/*
-!.claude/skills/legal-answer/
 
 presentation/

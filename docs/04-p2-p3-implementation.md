@@ -37,7 +37,7 @@
 - 파이프라인(스킬 AMENDMENT): `history` → `analyze` → crossmap 역매핑으로 영향 통제 도출 → 대응 체크리스트.
 
 ## legal-answer 스킬 연결
-[.claude/skills/legal-answer/SKILL.md](../.claude/skills/legal-answer/SKILL.md) 의 "의도별 도구 호출":
+[skills/legal-answer/SKILL.md](../skills/legal-answer/SKILL.md) 의 "의도별 도구 호출":
 - MAPPING → `crossmap.py`
 - AMENDMENT → `legalize.py history/analyze`
 - 법령 원문(로컬 대안) → `legalize.py show`

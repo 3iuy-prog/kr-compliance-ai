@@ -41,7 +41,11 @@ flowchart TB
 ```bash
 git clone https://github.com/3iuy-prog/kr-compliance-ai compliance-ai && cd compliance-ai
 python3 -m pip install --user -r requirements.txt      # pypdf (RAG용)
+mkdir -p ~/.claude/skills && ln -s "$PWD/skills/legal-answer" ~/.claude/skills/legal-answer   # /legal-answer 스킬 전역 등록
+echo "export COMPLIANCE_AI_HOME=\"$PWD\"" >> ~/.zshrc && source ~/.zshrc                              # 스킬이 저장소 도구를 찾는 경로 (bash면 ~/.bashrc)
 ```
+> 스킬은 홈에 심볼릭 링크로 등록되므로 **어느 디렉터리에서 `claude`를 열어도** `/legal-answer`를 쓸 수 있습니다.
+> 스킬은 `COMPLIANCE_AI_HOME`로 저장소의 도구를 절대경로 호출합니다. 위 `echo` 줄이 clone 위치를 영구 등록하며, 미설정 시에는 `~/workspace/ai-a3sc`를 가정합니다.
 
 ### STEP 2. 법령 데이터 받기 (legalize-kr)
 개정이력·diff 기능(P3)에 쓰이는 데이터입니다. 약 677MB(전체 Git 히스토리)입니다.
@@ -116,7 +120,7 @@ python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 ---
 
 ## 스킬 · 문서
-- **스킬**: [.claude/skills/legal-answer](.claude/skills/legal-answer/SKILL.md) — 표준 답변(근거 인용·계층 태깅·시행일 as-of·환각 가드·참고 고지)
+- **스킬**: [skills/legal-answer](skills/legal-answer/SKILL.md) — 표준 답변(근거 인용·계층 태깅·시행일 as-of·환각 가드·참고 고지). `~/.claude/skills/legal-answer`에 심볼릭 링크로 전역 등록(STEP 1)
 - **규약**: [CLAUDE.md](CLAUDE.md) — 이 저장소의 출력 규약(MANDATORY)
 - **문서**: [docs/00-data-sources.md](docs/00-data-sources.md) 데이터 갭 · [docs/01-architecture.md](docs/01-architecture.md) 아키텍처 · [docs/02-mcp-setup.md](docs/02-mcp-setup.md) MCP · [docs/03-legalize-integration.md](docs/03-legalize-integration.md) legalize-kr · [docs/04-p2-p3-implementation.md](docs/04-p2-p3-implementation.md) 매핑/개정영향 · [docs/05-rag.md](docs/05-rag.md) RAG
 

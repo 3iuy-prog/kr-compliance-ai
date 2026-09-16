@@ -67,7 +67,7 @@ MCP는 법제처 Open API 인증키(`OC`)가 필요하다. **직접 발급해야
 - `discover_tools`, `execute_tool` — 메타
 
 ⚠️ **출력의 링크 필드에 실제 OC 키가 그대로 찍힌다** (`…lawService.do?OC=<키>…`).
-답변에 검색 결과를 인용할 때 링크를 복사하지 말 것 — [`/legal-answer`](../.claude/skills/legal-answer/SKILL.md)
+답변에 검색 결과를 인용할 때 링크를 복사하지 말 것 — [`/legal-answer`](../skills/legal-answer/SKILL.md)
 스킬의 식별번호 노출 금지 규칙과 같은 맥락이다.
 
 ## 트러블슈팅 (2026-08-03 실측)
