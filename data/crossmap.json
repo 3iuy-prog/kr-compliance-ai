@@ -2,10 +2,11 @@
   "_meta": {
     "title": "크로스매핑 DB (P2)",
     "desc": "ISMS-P 인증기준 ↔ 개인정보 안전성확보조치 기준(고시) ↔ 법령 매핑. 개인정보/접근통제 축 시드.",
-    "verified_rule": "law verified=true = legalize.py 원문 대조 완료. isms verified = data/isms_p.json 동기화(2.5·2.6 권위출처 대조 완료 ✅, 2.7·2.9 세부는 미검증). notice(고시 조번호)는 버전변동 → MCP 확인 필요.",
+    "verified_rule": "law verified=true = legalize.py 원문 대조 완료. isms verified = data/isms_p.json 동기화(2.5·2.6 권위출처 대조 완료 ✅, 2.7·2.9 세부는 미검증). notice verified=true = notice_version 기준 조번호·조문 제목을 법령 MCP 원문과 대조 완료. 고시가 개정되면 다시 대조한다.",
     "isms_version": "ISMS-P 인증기준 2023.11 (101개) 기준 코드",
     "notice_name": "개인정보의 안전성 확보조치 기준(개인정보보호위원회 고시)",
-    "updated": "2026-07-15",
+    "notice_version": "제2026-9호 (2026-07-01 시행)",
+    "updated": "2026-11-10",
     "layers": {
       "L1": "법령",
       "L2": "행정규칙/고시",
@@ -26,7 +27,7 @@
           "article": "제5조",
           "title": "접근 권한의 관리",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
@@ -60,7 +61,7 @@
           "article": "제5조",
           "title": "접근 권한의 관리",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
@@ -87,7 +88,7 @@
           "article": "제5조",
           "title": "접근 권한의 관리",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
@@ -114,7 +115,7 @@
           "article": "제6조",
           "title": "접근통제",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
@@ -155,7 +156,7 @@
           "article": "제6조",
           "title": "접근통제",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
@@ -189,7 +190,7 @@
           "article": "제7조",
           "title": "개인정보의 암호화",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
@@ -223,7 +224,7 @@
           "article": "제8조",
           "title": "접속기록의 보관 및 점검",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
@@ -257,7 +258,7 @@
           "article": "제8조",
           "title": "접속기록의 보관 및 점검",
           "layer": "L2",
-          "verified": false
+          "verified": true
         }
       ],
       "law": [
