@@ -43,6 +43,7 @@ POOL = 50            # 하이브리드 결합 전 각 백엔드에서 가져올 
 TFIDF_WEIGHT = 0.25  # RRF에서 키워드 순위 가중치(의미 = 1.0). rag_eval.py 그리드 결과 — docs/05-rag.md
 PAGE_RE = re.compile(r"^<!-- p\.(\d+) -->[ \t]*$", re.M)     # tools/pdf2md.py의 쪽 표시
 CODE_QUERY = re.compile(r"\d+(?:\.\d+){1,3}")                # 질의 전체가 항목번호인지
+WARN_RE = re.compile(r"^<!-- warning:(.*?)-->$", re.S)       # pdf2md가 쪽 단위로 남긴 변환 경고
 ITEM_RE = re.compile(r"^\|\s*항\s*목\s*\|\s*(\d+(?:\.\d+)+)\s*([^|\n]*)\|")  # ISMS-P 등 항목 머리말 표
 
 
@@ -119,13 +120,18 @@ def chunk_md(pages: list[tuple[int, str]], size: int = 800) -> list[dict]:
 
     for page, text in pages:
         blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
+        warn = next((m.group(1).strip() for b in blocks if (m := WARN_RE.match(b))), "")
+        blocks = [b for b in blocks if not WARN_RE.match(b)]
         cur: list[str] = []
         cur_sec = section()
 
         def flush():
             nonlocal cur
             if cur:
-                out.append({"page": page, "text": "\n\n".join(cur), "section": cur_sec})
+                c = {"page": page, "text": "\n\n".join(cur), "section": cur_sec}
+                if warn:                            # pdf2md가 표 셀 누락을 표시한 쪽
+                    c["warning"] = warn
+                out.append(c)
             cur = []
 
         for b in blocks:
@@ -448,6 +454,9 @@ def cmd_search(a):
                 text = text[:240] + ("…" if len(text) > 240 else "")
             sec = f" [{c['section']}]" if c.get("section") else ""
             print(f"\n[{h['score']:.3f}] {c['source']} p.{c['page']} (chunk {c['id']}){sec}{ranks}\n  {text}")
+            if c.get("warning"):
+                print(f"  ⚠️ 표 구조 확인 필요: {c['warning']}\n"
+                      f"     → python3 tools/rag.py show --collection {a.collection} --page {c['page']} --raw")
 
 
 def _merge_overlap(prev: str, nxt: str, max_overlap: int = 400) -> str:
@@ -494,6 +503,27 @@ def cmd_show(a):
         items = list(dict.fromkeys((chunks[i].get("section") or "").split(" > ")[0] for i in gids))
         sec = f" [{' | '.join(s for s in items if s)}]" if any(items) else ""
         print(f"\n--- p.{page} (chunk {gids[0]}{'–' + str(gids[-1]) if len(gids) > 1 else ''}){sec}{mark} ---\n{text.strip()}")
+        warn = next((chunks[i]["warning"] for i in gids if chunks[i].get("warning")), "")
+        if warn:
+            print(f"\n⚠️ 표 구조 확인 필요: {warn}" + ("" if a.raw else " — --raw로 원본 PDF 텍스트를 함께 보세요"))
+        if a.raw:
+            print(_raw_pdf_page(src, page))
+
+
+def _raw_pdf_page(src: str, page) -> str:
+    """원본 PDF(data/kb_src/<같은 이름>.pdf)의 그 쪽 텍스트(pypdf). md 변환을 거치지 않은 대조용 원문.
+    표는 셀이 읽는 순서대로 한 줄씩 나열되므로 구조 대신 '값이 빠지지 않았는지·어느 셀과 짝인지' 확인용."""
+    pdf = KB.parent / "kb_src" / (Path(src).stem + ".pdf")
+    if not str(page).isdigit():
+        return f"\n(원본 대조 불가: 쪽 번호가 아닌 단위 '{page}')"
+    if not pdf.exists():
+        return f"\n(원본 PDF 없음: {pdf.name} — data/kb_src에 같은 이름의 PDF가 있어야 대조 가능)"
+    from pypdf import PdfReader
+    reader = PdfReader(str(pdf))
+    n = int(page)
+    if not 1 <= n <= len(reader.pages):
+        return f"\n(원본 PDF에 p.{n} 없음)"
+    return f"\n--- 원본 PDF p.{n} ({pdf.name}, pypdf 텍스트) ---\n{(reader.pages[n - 1].extract_text() or '').strip()}"
 
 
 def cmd_list(_):
@@ -557,6 +587,8 @@ def main():
     g.add_argument("--page", help="페이지 번호(해당 페이지 청크 전부). 조문 단위 컬렉션은 \"제29조\" 등")
     s.add_argument("--context", type=int, default=1, help="--chunk 앞뒤로 함께 볼 청크 수(기본 1)")
     s.add_argument("--source", help="--page가 여러 출처에 있을 때 파일명")
+    s.add_argument("--raw", action="store_true",
+                   help="원본 PDF(data/kb_src의 같은 이름)의 그 쪽 텍스트도 출력 — 표 구조 경고가 있을 때 대조용")
     s.set_defaults(func=cmd_show)
 
     sub.add_parser("list", help="컬렉션 목록").set_defaults(func=cmd_list)

@@ -20,6 +20,7 @@ import datetime
 import html
 import importlib.metadata
 import json
+import logging
 import os
 import re
 import sys
@@ -28,6 +29,7 @@ from collections import Counter
 from pathlib import Path
 
 PAGE_MARK = "<!-- p.{} -->"
+WARN_MARK = "<!-- warning:"                 # 쪽 표시 다음 줄. rag.py chunk_md가 읽는다
 PUA = re.compile(r"[-]")          # PDF 글머리 아이콘 등 사설 영역 문자(깨진 글자로 보임)
 WORD = re.compile(r"[가-힣A-Za-z0-9]{2,}")
 
@@ -43,8 +45,24 @@ def clean(md: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", md).strip()
 
 
-def convert(pdf: Path, pages: tuple[int, int] | None, batch: int = 20) -> list[tuple[int, str]]:
-    """batch쪽씩 나눠 변환하며 진행 상황 출력(모델은 한 번만 로드). 쪽 번호는 원본 PDF 기준."""
+class _TableDropCatcher(logging.Handler):
+    """docling TableFormer가 표 셀을 버릴 때 남기는 경고를 잡는다. docling 주석 그대로 '실제 내용 손실'
+    (버린 셀의 텍스트는 어느 표 셀에도 없다)이지만 쪽 번호가 없어, 변환 루프에서 쪽을 찾아 붙인다."""
+
+    def __init__(self):
+        super().__init__(logging.WARNING)
+        self.msgs: list[str] = []
+
+    def emit(self, record):
+        msg = record.getMessage()
+        if "dropped from the table" in msg:
+            self.msgs.append(msg)
+
+
+def convert(pdf: Path, pages: tuple[int, int] | None, batch: int = 20
+            ) -> tuple[list[tuple[int, str]], dict[int, list[str]]]:
+    """batch쪽씩 나눠 변환하며 진행 상황 출력(모델은 한 번만 로드). 쪽 번호는 원본 PDF 기준.
+    반환: ([(쪽, md)], {쪽: [표 셀 누락 경고]}). 경고가 난 묶음만 한 쪽씩 다시 변환해 쪽을 특정한다."""
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -53,18 +71,28 @@ def convert(pdf: Path, pages: tuple[int, int] | None, batch: int = 20) -> list[t
     opts = PdfPipelineOptions(do_ocr=False, do_table_structure=True)   # 텍스트 PDF: OCR 불필요(오인식 방지)
     opts.table_structure_options.do_cell_matching = True
     conv = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)})
+    catch = _TableDropCatcher()
+    logging.getLogger("MatchingPostProcessor").addHandler(catch)   # docling_ibm_models의 로거 이름
     first, last = pages or (1, len(PdfReader(str(pdf)).pages))
-    out, t0 = [], time.time()
+    out, warns, t0 = [], {}, time.time()
     for s in range(first, last + 1, batch):
         e = min(s + batch - 1, last)
+        catch.msgs.clear()
         doc = conv.convert(str(pdf), page_range=(s, e)).document
         out += [(p, clean(doc.export_to_markdown(page_no=p, compact_tables=True)))
                 for p in sorted(doc.pages.keys())]
+        if catch.msgs:                          # 이 묶음 어딘가에서 셀 누락 → 한 쪽씩 다시 돌려 쪽 특정
+            for p in range(s, e + 1):
+                catch.msgs.clear()
+                conv.convert(str(pdf), page_range=(p, p))
+                if catch.msgs:
+                    warns[p] = list(catch.msgs)
+                    print(f"   ⚠️ p.{p}: 표 셀 누락 — {catch.msgs[0]}", flush=True)
         done, total = e - first + 1, last - first + 1
         el = time.time() - t0
         print(f"   p.{s}-{e} 완료 ({done}/{total}쪽 · {el:.0f}초 · 남은 시간 약 "
               f"{el / done * (total - done):.0f}초)", flush=True)
-    return out
+    return out, warns
 
 
 def fidelity(pdf: Path, md_pages: list[tuple[int, str]]) -> dict:
@@ -114,15 +142,20 @@ def main():
 
     t0 = time.time()
     print(f"🔄 변환: {pdf.name} {'p.%d-%d' % pages if pages else '(전체)'} — docling(표 구조 인식, OCR 끔)", flush=True)
-    md_pages = convert(pdf, pages)
+    md_pages, warns = convert(pdf, pages)
     ver = importlib.metadata.version("docling")
     head = (f"<!-- source: {pdf.name} | converter: docling {ver} (tools/pdf2md.py) | "
             f"converted: {datetime.date.today()} -->")
-    body = "\n\n".join(f"{PAGE_MARK.format(p)}\n{md}" for p, md in md_pages)
+    def warn_line(p: int) -> str:              # rag.py chunk_md가 읽어 이 쪽 청크에 경고를 붙인다
+        n = sum(int(m.split()[0]) for m in warns[p] if m.split()[0].isdigit())
+        return f"{WARN_MARK} 표 변환 중 셀 {n}개가 버려짐(docling) — 이 쪽 표는 원본 PDF p.{p}와 대조 필요 -->\n\n"
+    body = "\n\n".join(f"{PAGE_MARK.format(p)}\n{warn_line(p) if p in warns else ''}{md}"
+                       for p, md in md_pages)
     out.write_text(f"{head}\n\n{body}\n", encoding="utf-8")
     print(f"✅ {out} — {len(md_pages)}쪽 · {time.time() - t0:.0f}초", flush=True)
 
     rep = fidelity(pdf, md_pages)
+    rep["table_warnings"] = {str(p): m for p, m in sorted(warns.items())}
     rep_path = out.with_suffix(".report.json")
     rep_path.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
     rate = rep["words_missing"] / max(rep["words_checked"], 1)
@@ -130,6 +163,9 @@ def main():
           f"누락 있는 페이지 {len(rep['issues'])}쪽 → {rep_path.name}")
     for it in sorted(rep["issues"], key=lambda x: -x["missing"])[:10]:
         print(f"   p.{it['page']}: {it['missing']}/{it['of']} {it['words'][:8]}")
+    if warns:
+        print(f"⚠️ 표 셀 누락 {len(warns)}쪽: {sorted(warns)} — md에 표시했고 검색·show 결과에 경고로 나온다"
+              f"(rag.py show --page N --raw로 원본 대조).")
 
 
 if __name__ == "__main__":
