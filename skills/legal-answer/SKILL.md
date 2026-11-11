@@ -42,7 +42,8 @@ description: 법률/컴플라이언스 질의에 표준 형식으로 답한다. 
 - **AMENDMENT** → `python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" history <법령>` 로 개정일 확인 후
   `python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" analyze <법령> --at <YYYY-MM-DD> --detail 5` 로 신설/삭제/개정 조문 구조를 받아
   "변경 요약 + 영향 통제항목(crossmap 역매핑) + 대응 체크리스트"로 가공한다.
-  영향 항목은 **개정된 조문마다** `crossmap.py by-law <법령> --jo <N>`으로 뽑는다 — 자동 추출 관계로 인증기준 항목을 **빠짐없이** 볼 수 있다(RAG 검색으로 찾지 말 것: 상위 몇 개만 나온다).
+  영향 항목은 **개정된 조문마다** `crossmap.py by-law <법령> --jo <N>`으로 뽑는다 — 자동 추출 관계로 인증기준 항목과 **그 조문을 받는 시행령 조문**을 빠짐없이 볼 수 있다(RAG 검색으로 찾지 말 것: 상위 몇 개만 나온다).
+  시행령 관계의 [대통령령 위임]/[근거]/[참조]는 문장 패턴 추정이다 — 영향 범위 판단에 쓰되, 답변에 인용할 때는 그 시행령 조문 원문을 `legalize.py show <법령> --kind 시행령 --jo <N>`으로 확인한다.
   ⚠️ `analyze`는 **조(條) 단위**만 반환한다. 항(項)·호(號) 번호를 answer에 쓰려면 그 조문 원문을 실제로 조회한 뒤에만. analyze를 항 번호의 근거로 표기하지 말 것.
 - **DIAGNOSIS** → `rag.py search`로 업로드 문서 관련 인증기준 원문(주요 확인사항·결함사례) 검색 + crossmap으로 통제 매칭 후 gap 정리.
 - **인증기준 근거 인용 시**: RAG 결과는 출처·페이지(`source p.N`)를 함께 표기. RAG는 참고 검색이므로 규범적 단정은 원문(안내서) 확인 후.

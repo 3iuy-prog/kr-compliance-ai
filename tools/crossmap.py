@@ -90,10 +90,7 @@ def cmd_by_law(a):
     for c in hits:
         print(_row(c)); print()
     if auto:
-        print(f"=== {a.name} {jo or '(전체)'} ← 인증기준 원문에 '관련 법규'로 적힌 항목 {len(auto)}건 (자동 추출) ===")
-        print("    ✅=현행 원문 조문 제목과 일치 · ⚠️ 제목 다름/❌ 없음=인용 전 원문 확인")
-        for r in sorted(auto, key=lambda r: [int(x) for x in r["from"]["id"].split(".")]):
-            print("  " + relations.fmt(r))
+        relations.print_grouped(auto, f"{a.name} {jo or '(전체)'}")
 
 
 def cmd_validate(_):
