@@ -242,9 +242,23 @@ def _versions(rel: str) -> list[dict]:
 
 
 def _inforce_commit(rel: str, as_of: str) -> dict | None:
-    """as_of 날짜에 실제 시행 중이던 버전(시행일 <= as_of 중 최신 시행일)."""
+    """as_of 날짜에 시행 중인 버전 = 시행일 <= as_of 인 버전 중 **공포일이 가장 늦은 것**.
+
+    legalize-kr의 각 공포본은 그 이전 개정을 누적해 담는다(시행 전인 부분 포함). 그래서 '시행일이 가장
+    늦은 것'을 고르면, 나중에 공포됐지만 먼저 시행된 개정을 놓친다.
+    예) 신용정보법: 2026-03-10 공포(시행 09-11) → 2026-05-12 공포(시행 08-13, 제44조의2 신설).
+        11-11 기준 옛 규칙은 03-10본을 골라 제44조의2가 없는 본문을 '현행'으로 냈다. 05-12본에는
+        03-10 개정 내용이 누적돼 있다(03-10에서 추가된 줄 15/15 포함 확인).
+    작업 사본(최신 공포본)이 이미 시행 중이면 그것이 답이므로 이력을 뒤지지 않는다(속도)."""
+    p = REPO / rel
+    if p.exists():
+        fm = frontmatter(p.read_text(encoding="utf-8"))
+        if fm.get("시행일자") and str(fm["시행일자"]) <= as_of:
+            head = git("log", "-1", "--format=%H", "--", rel).strip()
+            if head:
+                return {"commit": head, "공포": str(fm.get("공포일자", "")), "시행": str(fm["시행일자"])}
     cands = [v for v in _versions(rel) if v["시행"] and v["시행"] <= as_of]
-    return max(cands, key=lambda v: v["시행"]) if cands else None
+    return max(cands, key=lambda v: (v["공포"], v["시행"])) if cands else None
 
 
 def cmd_show(a):
