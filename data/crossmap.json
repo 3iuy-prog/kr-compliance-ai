@@ -5,8 +5,8 @@
     "verified_rule": "law verified=true = legalize.py 원문 대조 완료. isms verified = data/isms_p.json 동기화(2.5·2.6 권위출처 대조 완료 ✅, 2.7·2.9 세부는 미검증). notice verified=true = notice_version 기준 조번호·조문 제목을 법령 MCP 원문과 대조 완료. 고시가 개정되면 다시 대조한다.",
     "isms_version": "ISMS-P 인증기준 2023.11 (101개) 기준 코드",
     "notice_name": "개인정보의 안전성 확보조치 기준(개인정보보호위원회 고시)",
-    "notice_version": "제2026-9호 (2026-07-01 시행)",
-    "updated": "2026-11-10",
+    "notice_version": "제2026-9호 (2026-07-01 시행. 단 제15조제5호·제18조는 2027-01-01 시행 — 부칙, 안내서 2026.11판으로 확인)",
+    "updated": "2026-11-11",
     "layers": {
       "L1": "법령",
       "L2": "행정규칙/고시",
