@@ -11,6 +11,8 @@ URL 발견(웹검색)과 최종 답변은 에이전트(Claude)가 담당.
 - 공식 출처만 권장(law.go.kr, kisa.or.kr, fsec.or.kr, pipc.go.kr, data.go.kr 등).
   비공식 도메인이면 경고만 하고 진행(판단은 사용자).
 - 다운로드는 data/kb_src/ 에 저장(.gitignore). 인그레스트 후 tools/rag.py 로 검색.
+- 기존 컬렉션에 **추가**한다(rag.py ingest --append). 기존 문서는 유지되고 새 청크만 임베딩,
+  같은 파일명이면 그 파일만 교체. 컬렉션이 없으면 새로 만든다.
 """
 from __future__ import annotations
 import argparse
@@ -66,9 +68,9 @@ def main():
         download(url, dest)
         files.append(str(dest))
 
-    print(f"\n📥 인그레스트 → 컬렉션 '{a.collection}'")
+    print(f"\n📥 인그레스트 → 컬렉션 '{a.collection}'", flush=True)  # 하위 프로세스 출력보다 먼저 보이게
     r = subprocess.run([sys.executable, str(ROOT / "tools" / "rag.py"),
-                        "ingest", *files, "--collection", a.collection])
+                        "ingest", *files, "--collection", a.collection, "--append"])
     if r.returncode != 0:
         raise SystemExit("❌ 인그레스트 실패")
     print(f"\n다음: python tools/rag.py search \"<질의>\" --collection {a.collection} -k 5")

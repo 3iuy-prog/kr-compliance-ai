@@ -13,7 +13,8 @@
   모델은 RAG_EMBED_MODEL 환경변수로 교체.
 
 사용:
-  python tools/rag.py ingest <파일...> --collection isms      # PDF/txt/md 흡수
+  python tools/rag.py ingest <파일...> --collection isms      # PDF/txt/md 흡수(기존 컬렉션 덮어씀)
+  python tools/rag.py ingest <파일...> --collection isms --append   # 기존에 추가(새 청크만 임베딩)
   python tools/rag.py search "접속기록 보관 기간" --collection isms -k 5 [--mode auto|hybrid|dense|tfidf]
   python tools/rag.py list
   python tools/rag.py drop --collection isms
@@ -157,8 +158,9 @@ def col_dir(name: str) -> Path:
     return KB / name
 
 
-def write_collection(name: str, chunks: list[dict], model: str | None) -> dict:
-    """chunks: [{source, page, text}]. TF-IDF는 항상, model이 있으면 임베딩도 저장."""
+def write_collection(name: str, chunks: list[dict], model: str | None, dense=None) -> dict:
+    """chunks: [{source, page, text}]. TF-IDF는 항상, model이 있으면 임베딩도 저장.
+    dense(청크와 같은 순서의 행렬)를 주면 다시 계산하지 않고 그대로 저장한다(--append용)."""
     d = col_dir(name); d.mkdir(parents=True, exist_ok=True)
     for i, c in enumerate(chunks):
         c["id"] = i
@@ -167,7 +169,10 @@ def write_collection(name: str, chunks: list[dict], model: str | None) -> dict:
     dense_model = None
     if model:
         import numpy as np
-        np.save(d / "dense.npy", dense_encode(texts, model, show_progress=len(texts) > 200))
+        if dense is None:
+            dense = dense_encode(texts, model, show_progress=len(texts) > 200)
+        assert len(dense) == len(chunks), "임베딩 행 수와 청크 수 불일치"
+        np.save(d / "dense.npy", dense)
         dense_model = model
     elif (d / "dense.npy").exists():
         (d / "dense.npy").unlink()            # 옛 임베딩이 새 청크와 어긋나지 않도록
@@ -260,10 +265,9 @@ def _elapsed(t0: float) -> str:
     return f"{s:.1f}초" if s < 60 else f"{int(s // 60)}분 {int(s % 60)}초"
 
 
-def cmd_ingest(a):
-    t0 = time.time()
+def _read_files(files: list[str]) -> list[dict]:
     chunks = []  # {source, page, text}
-    for f in a.files:
+    for f in files:
         p = Path(f)
         if not p.exists():
             print(f"⚠️ 없음: {p}"); continue
@@ -271,19 +275,69 @@ def cmd_ingest(a):
             for c in chunk(text):
                 if len(c) >= 30:
                     chunks.append({"source": p.name, "page": page, "text": c})
-    if not chunks:
+    return chunks
+
+
+def cmd_ingest(a):
+    t0 = time.time()
+    new = _read_files(a.files)
+    if not new:
         raise SystemExit("❌ 추출된 청크 없음.")
-    model = None
-    if not a.no_dense:
-        if dense_available():
-            model = a.model
-            print(f"🧠 임베딩 생성: {model} (청크 {len(chunks)}개, 로컬 실행)")
-        else:
-            print("ℹ️ sentence-transformers 미설치 → TF-IDF만 인덱싱 "
-                  "(의미검색: python3 -m pip install --user sentence-transformers)")
-    meta = write_collection(a.collection, chunks, model)
+    exists = (col_dir(a.collection) / "index.json").exists()
+    if a.append and exists:
+        meta = _append(a, new)
+    else:
+        if exists:
+            old = json.loads((col_dir(a.collection) / "index.json").read_text(encoding="utf-8"))["meta"]
+            print(f"⚠️ 기존 컬렉션 '{a.collection}'(출처 {old['sources']})을 덮어씁니다. "
+                  f"기존 문서를 유지하고 추가하려면 --append")
+        model = None
+        if not a.no_dense:
+            if dense_available():
+                model = a.model or DEFAULT_MODEL
+                print(f"🧠 임베딩 생성: {model} (청크 {len(new)}개, 로컬 실행)")
+            else:
+                print("ℹ️ sentence-transformers 미설치 → TF-IDF만 인덱싱 "
+                      "(의미검색: python3 -m pip install --user sentence-transformers)")
+        meta = write_collection(a.collection, new, model)
     print(f"✅ '{a.collection}' 인그레스트: 청크 {meta['n']}개, 출처 {meta['sources']}, "
           f"임베딩 {meta['dense_model'] or '없음'} · {_elapsed(t0)}")
+
+
+def _append(a, new: list[dict]) -> dict:
+    """기존 청크·임베딩은 그대로 두고 새 파일의 청크만 임베딩해 덧붙인다.
+    같은 파일명이 이미 있으면 그 파일의 청크만 교체(중복 방지)."""
+    col = load_collection(a.collection)
+    model = col["meta"].get("dense_model")
+    new_sources = {c["source"] for c in new}
+    keep = [i for i, c in enumerate(col["chunks"]) if c["source"] not in new_sources]
+    replaced = sorted(new_sources & set(col["meta"]["sources"]))
+    if replaced:
+        print(f"♻️ 같은 파일명은 교체: {replaced}")
+    kept = [{k: v for k, v in col["chunks"][i].items() if k != "id"} for i in keep]
+
+    if not model:                             # 기존이 TF-IDF 전용이면 그대로 TF-IDF만
+        if dense_available() and not a.no_dense:
+            print(f"ℹ️ 기존 컬렉션에 임베딩이 없어 TF-IDF만 추가합니다. "
+                  f"의미검색을 켜려면 전체 파일로 다시 ingest(--append 없이)")
+        return write_collection(a.collection, kept + new, None)
+
+    if a.model and a.model != model:
+        raise SystemExit(f"❌ 모델 불일치: 기존 컬렉션은 {model}. 다른 모델로 추가하면 검색이 깨집니다 "
+                         f"— 전체 파일로 다시 ingest(--append 없이)")
+    if a.no_dense:
+        raise SystemExit("❌ 기존 컬렉션에 임베딩이 있어 --no-dense로 추가할 수 없습니다.")
+    if not dense_available():
+        raise SystemExit(f"❌ 기존 컬렉션에 임베딩({model})이 있어 새 청크도 임베딩해야 합니다 "
+                         f"— sentence-transformers 설치 필요")
+    import numpy as np
+    old = np.load(col["dense_path"])
+    if len(old) != len(col["chunks"]):
+        raise SystemExit("❌ 기존 임베딩과 청크 수가 어긋남 — 전체 파일로 다시 ingest 필요")
+    print(f"🧠 새 청크만 임베딩: {model} ({len(new)}개, 기존 {len(kept)}개 유지)")
+    emb = dense_encode([c["text"] for c in new], model, show_progress=len(new) > 200)
+    dense = np.vstack([old[keep], emb]) if keep else emb
+    return write_collection(a.collection, kept + new, model, dense=dense)
 
 
 def cmd_search(a):
@@ -341,8 +395,10 @@ def main():
 
     s = sub.add_parser("ingest", help="파일 흡수")
     s.add_argument("files", nargs="+"); s.add_argument("--collection", required=True)
-    s.add_argument("--model", default=DEFAULT_MODEL, help=f"임베딩 모델 (기본 {DEFAULT_MODEL})")
+    s.add_argument("--model", help=f"임베딩 모델 (기본 {DEFAULT_MODEL}; --append면 기존 컬렉션 모델)")
     s.add_argument("--no-dense", action="store_true", help="임베딩 생략, TF-IDF만")
+    s.add_argument("--append", action="store_true",
+                   help="기존 컬렉션에 추가(새 청크만 임베딩, 같은 파일명은 교체). 없으면 새로 생성")
     s.set_defaults(func=cmd_ingest)
 
     s = sub.add_parser("search", help="검색")
