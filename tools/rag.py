@@ -394,14 +394,15 @@ def cmd_ingest(a):
 
 def _append(a, new: list[dict]) -> dict:
     """기존 청크·임베딩은 그대로 두고 새 파일의 청크만 임베딩해 덧붙인다.
-    같은 파일명이 이미 있으면 그 파일의 청크만 교체(중복 방지)."""
+    같은 문서(확장자를 뺀 파일명이 같음)가 이미 있으면 그 문서의 청크만 교체(중복 방지)."""
     col = load_collection(a.collection)
     model = col["meta"].get("dense_model")
-    new_sources = {c["source"] for c in new}
-    keep = [i for i, c in enumerate(col["chunks"]) if c["source"] not in new_sources]
-    replaced = sorted(new_sources & set(col["meta"]["sources"]))
+    # 같은 문서 = 확장자를 뺀 파일명이 같음(안내서.pdf로 넣었던 것을 안내서.md로 다시 넣으면 교체, 중복 방지)
+    new_stems = {Path(c["source"]).stem for c in new}
+    keep = [i for i, c in enumerate(col["chunks"]) if Path(c["source"]).stem not in new_stems]
+    replaced = sorted(s for s in col["meta"]["sources"] if Path(s).stem in new_stems)
     if replaced:
-        print(f"♻️ 같은 파일명은 교체: {replaced}")
+        print(f"♻️ 같은 문서는 교체: {replaced} → {sorted({c['source'] for c in new})}")
     kept = [{k: v for k, v in col["chunks"][i].items() if k != "id"} for i in keep]
 
     if not model:                             # 기존이 TF-IDF 전용이면 그대로 TF-IDF만
@@ -537,7 +538,7 @@ def main():
     s.add_argument("--model", help=f"임베딩 모델 (기본 {DEFAULT_MODEL}; --append면 기존 컬렉션 모델)")
     s.add_argument("--no-dense", action="store_true", help="임베딩 생략, TF-IDF만")
     s.add_argument("--append", action="store_true",
-                   help="기존 컬렉션에 추가(새 청크만 임베딩, 같은 파일명은 교체). 없으면 새로 생성")
+                   help="기존 컬렉션에 추가(새 청크만 임베딩, 확장자 뺀 이름이 같은 문서는 교체). 없으면 새로 생성")
     s.set_defaults(func=cmd_ingest)
 
     s = sub.add_parser("search", help="검색")
