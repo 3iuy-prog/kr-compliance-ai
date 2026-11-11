@@ -6,7 +6,7 @@
 ## 설계 — 키워드 + 의미 하이브리드
 | 백엔드 | 구현 | 강점 | 필요 |
 |---|---|---|---|
-| 키워드 | 문자 n-gram(2·3) TF-IDF 코사인 | 문서와 같은 단어·조문 제목 질의 | 없음(순수 stdlib) |
+| 키워드 | 문자 n-gram(2·3) TF-IDF 코사인. 단 항목번호(`2.5.4`)는 쪼개지 않고 한 토큰으로 | 문서와 같은 단어·조문 제목·항목번호 질의 | 없음(순수 stdlib) |
 | 의미 | 로컬 임베딩 **nlpai-lab/KURE-v1**(BGE-m3 한국어 추가학습) 코사인 | 바꿔 말한 질의("로그"↔"접속기록", "패스워드"↔"비밀번호") | `sentence-transformers` (선택) |
 | 결합 | **가중 RRF** — 순위 r의 점수 `w/(60+r)`, 의미 w=1.0 · 키워드 w=0.25 | 조문번호 질의는 키워드가 보완 | — |
 
@@ -24,7 +24,7 @@ python3 -m pip install --user pypdf          # PDF 처리 시 1회
 python3 tools/rag.py ingest <파일...> --collection isms   # 로컬 pdf/txt/md
 python3 tools/rag.py search "접속기록 보관 기간" --collection isms -k 5   # 기본 --mode auto
 python3 tools/rag.py search "로그 보관 기간" "접속기록 보관" --collection isms   # 여러 질의 한 번에(모델 1회 로드)
-python3 tools/rag.py search "제48조의3" --collection isms --mode tfidf      # 백엔드 강제(auto|hybrid|dense|tfidf)
+python3 tools/rag.py search "2.5.4" --collection isms --mode tfidf          # 백엔드 강제(auto|hybrid|dense|tfidf)
 python3 tools/rag.py list
 python3 tools/rag.py reindex --collection isms   # TF-IDF만 재생성(임베딩 유지) — 토큰화 규칙 변경 후
 python3 tools/rag.py drop --collection isms
