@@ -4,6 +4,6 @@
 
 pypdf>=6.0        # PDF 텍스트 추출 (RAG ingest)
 
-# 선택(임베딩 백엔드 교체 시):
-# sentence-transformers   # 로컬 임베딩(BGE-m3 등). rag.py embed() 교체
-# numpy                   # 대규모 인덱스 가속(기본은 순수 python)
+# 선택(의미검색): 설치하면 rag.py가 TF-IDF + 로컬 임베딩 하이브리드로 동작.
+# torch 포함 약 3GB + 첫 실행 시 모델(nlpai-lab/KURE-v1, 약 2.3GB) 다운로드. 미설치 시 TF-IDF만.
+# sentence-transformers>=3.0

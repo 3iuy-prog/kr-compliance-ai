@@ -3,21 +3,40 @@
 "아무 PDF/텍스트나 넣으면 지식베이스가 되는" 검색 계층. 법령 아닌 문서(L3: ISMS-P 안내서,
 전자금융기반시설 점검항목, 금융보안원 가이드 등)를 컬렉션 단위로 흡수한다.
 
-## 설계
-- **오프라인·무API 기본**: 문자 n-gram(2·3) TF-IDF 코사인. 한국어 토크나이저·임베딩 모델·API 키 불필요.
+## 설계 — 키워드 + 의미 하이브리드
+| 백엔드 | 구현 | 강점 | 필요 |
+|---|---|---|---|
+| 키워드 | 문자 n-gram(2·3) TF-IDF 코사인 | 문서와 같은 단어·조문 제목 질의 | 없음(순수 stdlib) |
+| 의미 | 로컬 임베딩 **nlpai-lab/KURE-v1**(BGE-m3 한국어 추가학습) 코사인 | 바꿔 말한 질의("로그"↔"접속기록", "패스워드"↔"비밀번호") | `sentence-transformers` (선택) |
+| 결합 | **가중 RRF** — 순위 r의 점수 `w/(60+r)`, 의미 w=1.0 · 키워드 w=0.25 | 조문번호 질의는 키워드가 보완 | — |
+
+- **선택 의존성**: `sentence-transformers`가 없으면 ingest는 TF-IDF만 만들고, search `--mode auto`는 TF-IDF로 동작한다(기존과 동일).
+- **임베딩은 로컬 계산**: 별도 임베딩 API(외부 업체·API 키·과금)가 필요 없고, 인덱싱 시 문서 전체를 다른 업체로 보내지 않는다. 모델이 캐시에 있으면 `rag.py` 자체는 네트워크에 접근하지 않는다(`local_files_only`).
+  - ⚠️ **기밀 보호 수단은 아니다.** 검색 결과 청크와 Claude Code가 읽는 문서(P4 업로드 문서 포함)는 답변 생성을 위해 Anthropic API로 전송된다. 사내 문서를 넣을지는 조직의 생성형 AI 사용 정책·Anthropic 데이터 처리 조건으로 판단할 것.
 - **결정적 해시**: `zlib.crc32` (내장 `hash()`는 프로세스별 랜덤 시드라 사용 불가 — 이 함정 주의).
-- **임베딩 교체 지점**: [tools/rag.py](../tools/rag.py) `embed()` 하나만 바꾸면 BGE-m3(sentence-transformers)나 API 임베딩으로 승격 가능. 인터페이스(희소벡터+cosine)는 동일.
-- 인덱스는 컬렉션별 `data/kb/<name>/{chunks.jsonl, index.json}`. 원본·인덱스는 [.gitignore](../.gitignore)(대용량·재생성 가능).
+- 인덱스는 컬렉션별 `data/kb/<name>/{chunks.jsonl, index.json, dense.npy}`. 원본·인덱스는 [.gitignore](../.gitignore)(대용량·재생성 가능).
+- 모델 교체: `RAG_EMBED_MODEL` 환경변수 또는 `ingest --model`. 검색은 인덱스에 기록된 모델을 자동 사용.
+- **기존 컬렉션은 재인그레스트해야** 의미검색이 켜진다(`list`에서 `임베딩 없음`이면 TF-IDF만).
 
 ## 사용
 ```bash
 python3 -m pip install --user pypdf          # PDF 처리 시 1회
 python3 tools/rag.py ingest <파일...> --collection isms   # 로컬 pdf/txt/md
-python3 tools/rag.py search "접속기록 보관 기간" --collection isms -k 5
+python3 tools/rag.py search "접속기록 보관 기간" --collection isms -k 5   # 기본 --mode auto
+python3 tools/rag.py search "로그 보관 기간" "접속기록 보관" --collection isms   # 여러 질의 한 번에(모델 1회 로드)
+python3 tools/rag.py search "제48조의3" --collection isms --mode tfidf      # 백엔드 강제(auto|hybrid|dense|tfidf)
 python3 tools/rag.py list
+python3 tools/rag.py reindex --collection isms   # TF-IDF만 재생성(임베딩 유지) — 토큰화 규칙 변경 후
 python3 tools/rag.py drop --collection isms
 ```
 - HWP는 미지원 → 텍스트/PDF로 변환 후 투입.
+- 임베딩 설치: `python3 -m pip install --user sentence-transformers` (torch 포함 약 3GB). 첫 ingest 때 모델 약 2GB 다운로드.
+- **속도(CPU, 2026-11-11 측정)**
+  - 인덱싱: 모델 로드 약 10초 + 임베딩 청크당 약 0.6초. 실측: ISMS-P 안내서 2023.11.23판(264쪽, 484청크) **약 7분**(다른 작업과 CPU 공유 상태). 문서 추가 시 1회성. `ingest`·`reindex`는 끝에 소요 시간을 출력한다.
+  - `reindex`(TF-IDF만): 484청크 0.8초.
+  - 검색: 호출마다 torch·모델 로드로 **약 11초 고정 비용** + 질의당 약 0.1초. 그래서 질의 여러 개는 한 호출에 넘긴다(`search "q1" "q2" "q3"` → 3개도 약 11초). TF-IDF 모드는 약 0.3초.
+  - 주의: `ingest`는 컬렉션을 통째로 다시 만든다. 기존 컬렉션에 PDF 1개를 더하려면 전체 파일을 다시 넣어야 하므로 기존 청크도 다시 임베딩된다.
+- 검색 결과의 `(키워드 N위 · 의미 M위)`로 어느 백엔드가 찾았는지 확인할 수 있다.
 
 ## URL에서 바로 확보: kb_add ([tools/kb_add.py](../tools/kb_add.py))
 웹에서 찾은 가이드/고시 PDF를 다운로드+인그레스트 한 번에. discover→ingest→answer 루프의 중간 단계.
@@ -34,18 +53,57 @@ python3 tools/kb_add.py <PDF_URL> --collection sec_measures --name 안내서.pdf
 3. `rag search` → 제5조 접근권한 관리(3년 보관), **제6조의2 인터넷망 차단(2025 신설)** 원문 정확 추출
 → crossmap의 ⚠️ 안전성확보조치 조문 갭을 원문으로 보강.
 
-## 검증 (2026-07-15)
+## 검증 (2026-07-15, TF-IDF 단독 시절)
 - 실제 **ISMS-P 인증기준 안내서 PDF(10MB)** 인그레스트: 441 청크 / 2.4초.
 - 검색 품질:
   - "비밀번호 관리 작성규칙" → p.100 **"항목 2.5.4 비밀번호 관리 / 주요 확인사항"** 정확 검색(score 0.61).
   - "접속기록 보관 기간" → p.147 접속기록 항목 + 결함사례.
 - → 하드코딩 못 하던 **항목별 주요 확인사항·결함사례**를 PDF 투입만으로 확보.
 
+## 검색 품질 평가 (2026-11-11) — [tools/rag_eval.py](../tools/rag_eval.py)
+질의마다 정답이 몇 위에 오는지 측정. 평가 세트 2종:
+
+| 세트 | 코퍼스 | 정답 단위 |
+|---|---|---|
+| [data/rag_eval_isms.json](../data/rag_eval_isms.json) | **ISMS-P 인증기준 안내서 2023.11.23판**(개인정보위 게시판 '현재 안내서') → 컬렉션 `isms`, 484청크 | 인증기준 항목의 페이지 범위 |
+| [data/rag_eval.json](../data/rag_eval.json) | legalize-kr 법률 4종(개인정보보호법·정보통신망법·전자금융거래법·위치정보법), 조문 단위 621청크 | 조문 |
+
+```bash
+python3 tools/rag_eval.py --spec data/rag_eval_isms.json -v   # 실제 안내서(isms 컬렉션 필요)
+python3 tools/rag_eval.py                                      # 법률 세트: 인덱스 생성 + 전 모드
+python3 tools/rag_eval.py --reuse --weights 0,0.25,0.5,1       # 키워드 가중치 비교
+```
+
+### ISMS-P 안내서 (실제 L3 문서)
+| 방식 | 바꿔 말한 질의(27) hit@1 / hit@5 / MRR | 항목명(6) hit@1 | 항목번호(4) hit@1 / hit@5 |
+|---|---|---|---|
+| TF-IDF | 56% / 85% / 0.67 | 100% | 0% / 100% |
+| 의미(KURE-v1) 단독 | 74% / 96% / 0.83 | 100% | 0% / 0% |
+| **하이브리드 w=0.25 (기본)** | **74% / 96% / 0.84** | **100%** | **25% / 75%** |
+| 하이브리드 w=1.0 | 67% / 93% / 0.77 | 100% | 25% / 100% |
+
+### 법률 원문
+| 방식 | 바꿔 말한 질의(26) hit@1 / hit@5 / MRR | 조문 제목(6) hit@1 | 조문번호(6) hit@1 / hit@5 |
+|---|---|---|---|
+| TF-IDF | 12% / 35% / 0.21 | 100% | 0% / 50% |
+| 의미(KURE-v1) 단독 | 54% / 92% / 0.72 | 100% | 33% / 67% |
+| **하이브리드 w=0.25 (기본)** | **58% / 88% / 0.70** | **100%** | **50% / 83%** |
+| 하이브리드 w=1.0 | 50% / 69% / 0.59 | 100% | 50% / 67% |
+
+- 안내서는 법률보다 평이한 문장이라 TF-IDF도 꽤 찾지만(5위 내 85%), 의미검색으로 1위 적중이 +18%p. 법률에서는 TF-IDF가 바꿔 말한 질의를 거의 못 찾는다(5위 내 35%).
+- 키워드를 동일 가중(w=1)으로 섞으면 두 세트 모두 바꿔 말한 질의가 나빠진다. **w=0.25가 두 세트에서 모두 최선이거나 동률** → 기본값.
+- 의미검색 단독은 번호 질의("2.5.4")를 못 찾는다(0%) — 하이브리드에서 키워드가 보완. 번호 질의의 1위는 대개 목차 페이지(번호가 실제로 나열됨)라 hit@1은 낮고 정상이다. 번호로 항목을 찾을 때는 `crossmap.py isms <코드>`가 1차, RAG는 원문 상세용.
+- **항목번호 토큰화 수정(2026-11-11)**: 예전엔 `.`을 지워 "2.5.4"가 "2","5","4"로 쪼개졌다(번호 질의 0%). 이제 `2_5_4` 한 토큰으로만 매칭(n-gram을 만들면 2.5.1·2.5.2와 조각이 겹쳐 목차가 이김). 기존 컬렉션은 `rag.py reindex --collection <이름>`으로 반영.
+- **한계**: 유형별 질의가 4~27개라 1~2건 차이는 우연일 수 있다. 정답 페이지 범위는 항목 시작~다음 항목 시작 페이지(경계 페이지 포함)라 다소 관대하다. 모델 비교(예: `--model BAAI/bge-m3`)는 미실시.
+
 ## legal-answer 연결
 - **L3 근거**: `crossmap.py isms`(항목ID·명칭) + `rag.py search`(원문 상세, 출처·페이지 표기).
 - **DIAGNOSIS(P4)**: 업로드 문서 → rag 검색으로 관련 인증기준·결함사례 매칭 → crossmap으로 통제/법령 연결 → gap.
+- **질의 확장**: 스킬이 원 질의 + 법정·인증기준 용어로 바꾼 질의 1~2개를 함께 검색한다([SKILL.md](../skills/legal-answer/SKILL.md) "RAG 검색 요령"). 임베딩 미설치 환경에서도 효과가 있다.
 
 ## 확장 로드맵
-- 임베딩 백엔드 승격(의미검색 강화) — `embed()` 교체.
+- ~~임베딩 백엔드 승격~~ → 2026-11-11 하이브리드 도입(위 평가).
+- 안전성확보조치 안내서 등 다른 L3 문서로 평가 세트 확장, BGE-m3 등 모델 비교.
+- 법령·안내서 구조(조문/항목 헤더) 인지 청킹 — 현재는 문단 800자 단위.
 - 컬렉션 예: `isms`(인증기준), `efin`(전자금융기반시설 점검항목), `fsec`(금융보안원 가이드).
 - RAG 결과 스니펫을 crossmap 항목과 자동 링크.

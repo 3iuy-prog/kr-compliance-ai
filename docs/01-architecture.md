@@ -22,7 +22,7 @@ flowchart TB
     subgraph RET["검색·조회 레이어"]
         M1["법령 MCP<br/>(law.go.kr OpenAPI)"]
         M2["행정규칙 조회<br/>(고시·시행세칙·별표)"]
-        R1["L3 벡터 RAG<br/>(ISMS-P/기반시설 점검항목)"]
+        R1["L3 하이브리드 RAG<br/>(ISMS-P/기반시설 점검항목)"]
         X1["크로스매핑 테이블<br/>(통제↔법령↔인증기준)"]
     end
 
@@ -53,7 +53,7 @@ flowchart TB
 | **질의 라우터** | 질문 의도 분류 → 4개 파이프라인 중 선택 | LLM 함수호출/분기 |
 | **법령 MCP** | L1 법령 본문·조문 실시간 조회 | `chrisryugj/korean-law-mcp` (환각검증 내장) |
 | **행정규칙 조회** | L2 고시·시행세칙·별표 조회 | 동 MCP의 행정규칙 도구 / `ChangooLee`(132도구) 대체 |
-| **L3 벡터 RAG** | ISMS-P·기반시설 점검항목 시맨틱 검색 | 임베딩 + 벡터DB (아래 스택) |
+| **L3 하이브리드 RAG** | ISMS-P·기반시설 점검항목 검색(키워드+의미) | TF-IDF + 로컬 임베딩, RRF 결합 — [05-rag.md](05-rag.md) |
 | **크로스매핑** | 통제↔법령↔인증기준 정합 조회 | 사전 구축 매핑 DB 질의 |
 | **개정이력** | legalize-kr Git diff로 조항 변경 추적 | `git log -p` 파싱 |
 | **환각 검증 게이트** | 답변의 조항 인용을 원문과 대조, 불일치 시 차단·재검색 | MCP citation verification |
@@ -88,8 +88,8 @@ flowchart TB
 | LLM | **Claude Opus 4.8** (claude-opus-4-8) | 최신·최고 성능. 긴 법령 컨텍스트 유리 |
 | Agent 런타임 | Claude Agent SDK / Claude Code | MCP 네이티브 연동 |
 | 법령/행정규칙 | korean-law-mcp (chrisryugj) | 환각검증 + Claude Code 궁합 |
-| 벡터DB | **Chroma** or **pgvector** | 로컬·경량. L3만 인덱싱 |
-| 임베딩 | 한국어 임베딩 모델 (예: BGE-m3, KURE) | 법률 용어 특화 검색 |
+| 벡터 저장 | 컬렉션별 파일(`data/kb/<이름>/dense.npy`) + 전수 비교 | 수천 청크 규모라 벡터DB 불필요. 수십만 청크로 커지면 Chroma/pgvector 검토 |
+| 임베딩 | **nlpai-lab/KURE-v1** (로컬, sentence-transformers) | 선택 설치. 미설치 시 TF-IDF만. 별도 임베딩 API 불필요(단, Claude가 읽는 내용은 Anthropic API로 전송) |
 | 개정이력 | legalize-kr repo + `git` | diff 파싱 |
 | 매핑 DB | SQLite/JSON | 사전 구축(반자동: LLM으로 초안→검수) |
 | UI | Streamlit / Next.js | 데모 속도 vs 완성도 |
@@ -101,7 +101,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     S1["L3 원문 수집<br/>PDF/HWP"] --> S2["파싱→구조화 JSON<br/>(항목ID·확인사항·근거)"]
-    S2 --> S3["임베딩→벡터DB"]
+    S2 --> S3["청킹→TF-IDF+임베딩 인덱스"]
     S2 --> S4["매핑 초안 생성<br/>(LLM: 항목↔법령)"]
     S4 --> S5["전문가 검수<br/>→ 매핑 DB 확정"]
     D1["legalize-kr clone"] --> S4
