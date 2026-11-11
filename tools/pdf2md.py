@@ -70,7 +70,9 @@ def fidelity(pdf: Path, md_pages: list[tuple[int, str]]) -> dict:
     reader = PdfReader(str(pdf))
     ref = {i + 1: WORD.findall(pg.extract_text() or "") for i, pg in enumerate(reader.pages)}
     df = Counter(w for ws in ref.values() for w in set(ws))
-    boiler = {w for w, n in df.items() if n > 0.25 * len(ref)}
+    # 반복 단어(머리글 등) = 전체의 25% 초과 '그리고' 3쪽 초과에 나오는 단어. 쪽수 하한이 없으면
+    # 짧은 문서에서 모든 단어가 반복 단어로 빠져 대조가 0단어(=검사 안 함)가 된다.
+    boiler = {w for w, n in df.items() if n > max(0.25 * len(ref), 3)}
     report = {"pages": len(md_pages), "boilerplate_words": len(boiler), "issues": []}
     total = missing = 0
     for p, md in md_pages:
@@ -83,6 +85,8 @@ def fidelity(pdf: Path, md_pages: list[tuple[int, str]]) -> dict:
                                      "words": sorted(set(miss))[:30]})
     report["words_checked"] = total
     report["words_missing"] = missing
+    if total == 0:
+        print("   ⚠️ 대조할 본문 단어가 없습니다(이미지 PDF·텍스트 추출 실패 가능) — 원본을 직접 확인하세요.")
     return report
 
 
