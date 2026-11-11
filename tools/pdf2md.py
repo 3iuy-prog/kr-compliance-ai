@@ -17,6 +17,7 @@ LLM으로 다시 쓰지 않는다 — 결정적 변환이라 같은 PDF는 항�
 from __future__ import annotations
 import argparse
 import datetime
+import html
 import importlib.metadata
 import json
 import os
@@ -34,6 +35,9 @@ WORD = re.compile(r"[가-힣A-Za-z0-9]{2,}")
 def clean(md: str) -> str:
     md = PUA.sub("", md)
     md = re.sub(r"^\s*<!-- image -->\s*$", "", md, flags=re.M)
+    # docling은 <, >, &를 &lt; &gt; &amp;로 내보낸다 → 원문 그대로 인용할 수 있게 되돌림
+    # (예: "부칙 <제2026-9호, 2026. 7. 1.>"). 쪽 표시 <!-- p.N -->는 이 함수 밖에서 붙이므로 영향 없음.
+    md = html.unescape(md)
     md = re.sub(r"^(\s*[-*]) +", r"\1 ", md, flags=re.M)   # 아이콘 제거 후 남은 "-  " 공백
     md = re.sub(r"[ \t]+$", "", md, flags=re.M)
     return re.sub(r"\n{3,}", "\n\n", md).strip()
