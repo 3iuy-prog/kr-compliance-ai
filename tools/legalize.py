@@ -315,6 +315,10 @@ def cmd_diff(a):
 
 
 def main():
+    # Windows 콘솔(cp949)에서 이모지·특수문자 출력 시 UnicodeEncodeError 방지
+    for s in (sys.stdout, sys.stderr):
+        if hasattr(s, "reconfigure"):
+            s.reconfigure(encoding="utf-8", errors="replace")
     if not REPO.exists():
         raise SystemExit(f"❌ vendor/legalize-kr 없음. 먼저 clone 필요:\n"
                          f"   git clone https://github.com/legalize-kr/legalize-kr {REPO}")
