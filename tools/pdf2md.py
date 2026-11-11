@@ -151,11 +151,20 @@ def main():
         return f"{WARN_MARK} 표 변환 중 셀 {n}개가 버려짐(docling) — 이 쪽 표는 원본 PDF p.{p}와 대조 필요 -->\n\n"
     body = "\n\n".join(f"{PAGE_MARK.format(p)}\n{warn_line(p) if p in warns else ''}{md}"
                        for p, md in md_pages)
-    out.write_text(f"{head}\n\n{body}\n", encoding="utf-8")
+    text = f"{head}\n\n{body}\n"
+    # 이전에 kb_fix.py로 검증·보관한 교정본이 있으면 다시 적용(재변환해도 교정이 사라지지 않게)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from kb_fix import apply_fixes
+    text, fixed = apply_fixes(text, pdf, out.parent / f"{out.stem}.fixes")
+    if fixed:
+        print(f"♻️ 보관된 교정본 적용: p.{fixed}", flush=True)
+    out.write_text(text, encoding="utf-8")
     print(f"✅ {out} — {len(md_pages)}쪽 · {time.time() - t0:.0f}초", flush=True)
 
     rep = fidelity(pdf, md_pages)
-    rep["table_warnings"] = {str(p): m for p, m in sorted(warns.items())}
+    # 교정본이 적용된 쪽은 경고에서 빼고 따로 기록(이미 원본 대조·교정됨)
+    rep["table_warnings"] = {str(p): m for p, m in sorted(warns.items()) if p not in fixed}
+    rep["corrected_pages"] = sorted(fixed)
     rep_path = out.with_suffix(".report.json")
     rep_path.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
     rate = rep["words_missing"] / max(rep["words_checked"], 1)
@@ -163,9 +172,12 @@ def main():
           f"누락 있는 페이지 {len(rep['issues'])}쪽 → {rep_path.name}")
     for it in sorted(rep["issues"], key=lambda x: -x["missing"])[:10]:
         print(f"   p.{it['page']}: {it['missing']}/{it['of']} {it['words'][:8]}")
-    if warns:
-        print(f"⚠️ 표 셀 누락 {len(warns)}쪽: {sorted(warns)} — md에 표시했고 검색·show 결과에 경고로 나온다"
-              f"(rag.py show --page N --raw로 원본 대조).")
+    open_warns = sorted(set(warns) - set(fixed))
+    if open_warns:
+        print(f"⚠️ 표 셀 누락 {len(open_warns)}쪽: {open_warns} — md에 표시했고 검색·show 결과에 경고로 나온다"
+              f"(kb-table-verify 스킬로 원본 대조·교정).")
+    if set(warns) & set(fixed):
+        print(f"✔ 표 셀 누락이 있었지만 교정본이 적용된 쪽: {sorted(set(warns) & set(fixed))}")
 
 
 if __name__ == "__main__":

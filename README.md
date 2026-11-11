@@ -44,6 +44,9 @@ python3 -m pip install --user -r requirements.txt      # pypdf (RAG용)
 python3 -m pip install --user sentence-transformers    # (선택) RAG 의미검색 — 약 3GB + 모델 2.3GB
 python3 -m pip install --user docling                  # (선택·권장) PDF → Markdown 변환(tools/pdf2md.py)
 mkdir -p ~/.claude/skills && ln -s "$PWD/skills/legal-answer" ~/.claude/skills/legal-answer   # /legal-answer 스킬 전역 등록
+ln -s "$PWD/skills/kb-table-verify" ~/.claude/skills/kb-table-verify                           # 변환 표 시각 대조 스킬
+# Windows(관리자 권한 없이): New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\<스킬>" -Target "<저장소>\skills\<스킬>"
+# (선택·권장) poppler — Claude가 PDF 쪽을 이미지로 읽어 표를 대조(kb-table-verify). Windows: winget install oschwartz10612.Poppler / macOS: brew install poppler
 echo "export COMPLIANCE_AI_HOME=\"$PWD\"" >> ~/.zshrc && source ~/.zshrc                              # 스킬이 저장소 도구를 찾는 경로 (bash면 ~/.bashrc)
 ```
 > 스킬은 홈에 심볼릭 링크로 등록되므로 **어느 디렉터리에서 `claude`를 열어도** `/legal-answer`를 쓸 수 있습니다.
@@ -114,6 +117,7 @@ python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 | [tools/legalize.py](tools/legalize.py) | 법령 조회·개정이력·diff | `python3 tools/legalize.py show 개인정보보호법 --jo 29 --as-of 2026-07-16` |
 | [tools/crossmap.py](tools/crossmap.py) | 통제↔법령 크로스매핑 | `python3 tools/crossmap.py by-law 개인정보보호법 --jo 29` |
 | [tools/pdf2md.py](tools/pdf2md.py) | PDF → Markdown(표·쪽 표시 유지, 원문 대조) | `python3 tools/pdf2md.py data/kb_src/안내서.pdf` |
+| [tools/kb_fix.py](tools/kb_fix.py) | 변환 md의 한 쪽을 검증된 교정본으로 교체(원본에 없는 단어 거부) | `python3 tools/kb_fix.py data/kb_src/안내서.md --page 96 --file 교정본.md --check` |
 | [tools/rag.py](tools/rag.py) | PDF 지식베이스 검색(키워드+의미 하이브리드) | `python3 tools/rag.py search "접속기록 보관" --collection isms` |
 | [tools/kb_add.py](tools/kb_add.py) | URL→다운로드→인그레스트 | `python3 tools/kb_add.py "<url>" --collection fsec` |
 

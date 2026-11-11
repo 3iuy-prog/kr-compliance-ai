@@ -65,6 +65,11 @@ python3 tools/rag.py ingest data/kb_src/안내서.md --collection isms
 - **표 셀 누락 경고**: docling(TableFormer)이 표 셀을 버리면 "N of M pdf cells … were dropped from the table" 경고를 남긴다(docling 주석상 '실제 내용 손실'). 쪽 번호가 없어서 `pdf2md`가 경고 난 20쪽 묶음만 한 쪽씩 다시 변환해 쪽을 특정하고,
   md의 그 쪽에 `<!-- warning: … -->`를 남긴다(.report.json의 `table_warnings`에도). `ingest`는 그 쪽 청크에 `warning`을 붙이고, `search`·`show`가 `⚠️ 표 구조 확인 필요`와 `show --page N --raw` 안내를 출력한다.
   `show --raw`는 `data/kb_src`의 같은 이름 PDF에서 그 쪽 텍스트(pypdf)를 함께 보여 준다 — 답변 시 Claude가 원본과 대조한다(스킬 규칙). 단어는 남고 위치만 틀어진 경우는 원문 대조(단어)로도, 이 경고로도 못 잡는다.
+- **표 시각 대조·교정** ([skills/kb-table-verify](../skills/kb-table-verify/SKILL.md), [tools/kb_fix.py](../tools/kb_fix.py)): 단어는 다 있는데 위치만 틀어진 표는 단어 대조·docling 경고로 못 잡는다 → Claude가 원본 PDF 쪽을 **이미지로** 보고 대조.
+  - 이미지 수단(위에서부터): Read 도구 `pages`(poppler) → `pdftoppm` 명령 → `pypdfium2` → 없으면 시각 대조 없이 경고 문구를 사용자에게 알림.
+  - 교정은 LLM이 쓴 텍스트가 지식베이스에 들어가는 유일한 지점이라 `kb_fix.py`가 **교정본의 모든 단어가 원본 PDF 그 쪽 텍스트에 있는지** 검사(띄어쓰기 무시)하고, 하나라도 없으면 거부한다. 구조(행·열 배치, 병합 셀 값 반복)만 고칠 수 있다.
+  - 교정본은 `<문서>.fixes/p<쪽>.md`에 사유·날짜와 함께 보관, `pdf2md` 재변환 시 자동 재적용(다시 검사). md에 `<!-- corrected: … -->`, 청크에 `corrected` → `search`·`show`에 `✔ 교정된 쪽`.
+  - 실증(2026-11-11): 안전성확보조치 안내서 p.96 "암호화 적용 기준 요약" — pdftoppm 이미지로 대조해 표 제목 복원, 묶음 셀 '정보통신망을 통한 송·수신 시'·'저장 시'를 해당 행마다 반복. 원본에 없는 '3년 보관'을 넣은 시험 교정본은 거부됨. 그림으로만 있는 "참고" 표시도 원본 텍스트에 없어 거부 → 교정본에서 제외.
 - **구조 단위 청킹**: md는 항목 머리말 표(`| 항 목 | 2.5.4 … |`)와 소제목(#)에서 자르고, 표·문단을 중간에서 자르지 않는다(긴 표는 행 단위로 나누고 머리행 반복). 청크는 쪽을 넘지 않는다.
   각 청크에 `section`(예: `2.9.4 로그 및 접속기록 관리 > 결함사례`)을 기록해 검색 인덱스 앞에 붙이고, `search`·`show` 출력에도 표시한다.
 - 변환 md도 원본 PDF처럼 `data/kb_src/`(gitignore) — 각 기관 저작물.

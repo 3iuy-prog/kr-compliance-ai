@@ -44,6 +44,7 @@ TFIDF_WEIGHT = 0.25  # RRF에서 키워드 순위 가중치(의미 = 1.0). rag_e
 PAGE_RE = re.compile(r"^<!-- p\.(\d+) -->[ \t]*$", re.M)     # tools/pdf2md.py의 쪽 표시
 CODE_QUERY = re.compile(r"\d+(?:\.\d+){1,3}")                # 질의 전체가 항목번호인지
 WARN_RE = re.compile(r"^<!-- warning:(.*?)-->$", re.S)       # pdf2md가 쪽 단위로 남긴 변환 경고
+CORR_RE = re.compile(r"^<!-- corrected:(.*?)-->$", re.S)     # kb_fix.py가 남긴 교정 표시
 ITEM_RE = re.compile(r"^\|\s*항\s*목\s*\|\s*(\d+(?:\.\d+)+)\s*([^|\n]*)\|")  # ISMS-P 등 항목 머리말 표
 
 
@@ -121,7 +122,8 @@ def chunk_md(pages: list[tuple[int, str]], size: int = 800) -> list[dict]:
     for page, text in pages:
         blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
         warn = next((m.group(1).strip() for b in blocks if (m := WARN_RE.match(b))), "")
-        blocks = [b for b in blocks if not WARN_RE.match(b)]
+        corr = next((m.group(1).strip() for b in blocks if (m := CORR_RE.match(b))), "")
+        blocks = [b for b in blocks if not (WARN_RE.match(b) or CORR_RE.match(b))]
         cur: list[str] = []
         cur_sec = section()
 
@@ -131,6 +133,8 @@ def chunk_md(pages: list[tuple[int, str]], size: int = 800) -> list[dict]:
                 c = {"page": page, "text": "\n\n".join(cur), "section": cur_sec}
                 if warn:                            # pdf2md가 표 셀 누락을 표시한 쪽
                     c["warning"] = warn
+                if corr:                            # kb_fix.py로 검증·교정한 쪽
+                    c["corrected"] = corr
                 out.append(c)
             cur = []
 
@@ -454,6 +458,8 @@ def cmd_search(a):
                 text = text[:240] + ("…" if len(text) > 240 else "")
             sec = f" [{c['section']}]" if c.get("section") else ""
             print(f"\n[{h['score']:.3f}] {c['source']} p.{c['page']} (chunk {c['id']}){sec}{ranks}\n  {text}")
+            if c.get("corrected"):
+                print(f"  ✔ 교정된 쪽: {c['corrected']} — 원본 PDF 대조 후 표 구조를 고친 내용")
             if c.get("warning"):
                 print(f"  ⚠️ 표 구조 확인 필요: {c['warning']}\n"
                       f"     → python3 tools/rag.py show --collection {a.collection} --page {c['page']} --raw")
@@ -503,6 +509,9 @@ def cmd_show(a):
         items = list(dict.fromkeys((chunks[i].get("section") or "").split(" > ")[0] for i in gids))
         sec = f" [{' | '.join(s for s in items if s)}]" if any(items) else ""
         print(f"\n--- p.{page} (chunk {gids[0]}{'–' + str(gids[-1]) if len(gids) > 1 else ''}){sec}{mark} ---\n{text.strip()}")
+        corr = next((chunks[i]["corrected"] for i in gids if chunks[i].get("corrected")), "")
+        if corr:
+            print(f"\n✔ 교정된 쪽: {corr}")
         warn = next((chunks[i]["warning"] for i in gids if chunks[i].get("warning")), "")
         if warn:
             print(f"\n⚠️ 표 구조 확인 필요: {warn}" + ("" if a.raw else " — --raw로 원본 PDF 텍스트를 함께 보세요"))
