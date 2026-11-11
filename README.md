@@ -117,6 +117,7 @@ python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 | [tools/legalize.py](tools/legalize.py) | 법령 조회·개정이력·diff | `python3 tools/legalize.py show 개인정보보호법 --jo 29 --as-of 2026-07-16` |
 | [tools/crossmap.py](tools/crossmap.py) | 통제↔법령 크로스매핑 | `python3 tools/crossmap.py by-law 개인정보보호법 --jo 29` |
 | [tools/pdf2md.py](tools/pdf2md.py) | PDF → Markdown(표·쪽 표시 유지, 원문 대조) | `python3 tools/pdf2md.py data/kb_src/안내서.pdf` |
+| [tools/relations.py](tools/relations.py) | 인그레스트 시 관계 추출(ISMS-P 관련 법규)·역방향 조회 | `python3 tools/relations.py by-item 2.9.4` |
 | [tools/kb_fix.py](tools/kb_fix.py) | 변환 md의 한 쪽을 검증된 교정본으로 교체(원본에 없는 단어 거부) | `python3 tools/kb_fix.py data/kb_src/안내서.md --page 96 --file 교정본.md --check` |
 | [tools/rag.py](tools/rag.py) | PDF 지식베이스 검색(키워드+의미 하이브리드) | `python3 tools/rag.py search "접속기록 보관" --collection isms` |
 | [tools/kb_add.py](tools/kb_add.py) | URL→다운로드→인그레스트 | `python3 tools/kb_add.py "<url>" --collection fsec` |

@@ -45,7 +45,8 @@ PAGE_RE = re.compile(r"^<!-- p\.(\d+) -->[ \t]*$", re.M)     # tools/pdf2md.py�
 CODE_QUERY = re.compile(r"\d+(?:\.\d+){1,3}")                # 질의 전체가 항목번호인지
 WARN_RE = re.compile(r"^<!-- warning:(.*?)-->$", re.S)       # pdf2md가 쪽 단위로 남긴 변환 경고
 CORR_RE = re.compile(r"^<!-- corrected:(.*?)-->$", re.S)     # kb_fix.py가 남긴 교정 표시
-ITEM_RE = re.compile(r"^\|\s*항\s*목\s*\|\s*(\d+(?:\.\d+)+)\s*([^|\n]*)\|")  # ISMS-P 등 항목 머리말 표
+# ISMS-P 등 항목 머리말 표. docling이 칸을 잘못 나눈 "| 항 | 목 3.5.2 … |"도 인식(ISMS-P 2023.11판 3.5.2)
+ITEM_RE = re.compile(r"^\|\s*항\s*\|?\s*목\s*\|?\s*(\d+(?:\.\d+)+)\s*([^|\n]*)\|")
 
 
 # ---------- 텍스트 추출 ----------
@@ -400,6 +401,15 @@ def cmd_ingest(a):
         meta = write_collection(a.collection, new, model)
     print(f"✅ '{a.collection}' 인그레스트: 청크 {meta['n']}개, 출처 {meta['sources']}, "
           f"임베딩 {meta['dense_model'] or '없음'} · {_elapsed(t0)}")
+    # 원문에 관계가 명시된 문서(ISMS-P '관련 법규' 등)는 넣을 때 관계도 뽑아 둔다 — 역방향·전수 조회용
+    for f in a.files:
+        p = Path(f)
+        if p.exists() and is_paged_md(p):
+            try:
+                import relations
+                relations.extract_auto(p)
+            except Exception as e:                # 관계 추출 실패가 인그레스트를 막지 않게
+                print(f"⚠️ 관계 추출 실패({p.name}): {e}")
 
 
 def _append(a, new: list[dict]) -> dict:

@@ -79,12 +79,21 @@ def cmd_by_law(a):
     jo = a.jo if not a.jo or a.jo.startswith("제") else f"제{a.jo}조"
     hits = [c for c in db["controls"]
             if any(l["name"] == a.name and (not jo or l["article"] == jo)
-                   for l in c.get("law", []))]
-    if not hits:
-        raise SystemExit(f"❌ {a.name} {jo or ''}에 매핑된 통제 없음.")
-    print(f"=== {a.name} {jo or '(전체)'} ← 관련 통제 {len(hits)}건 ===\n")
+                   for l in c.get("law", []) + c.get("notice", []))]
+    # 문서에서 자동 추출한 관계(ISMS-P 안내서 '관련 법규' 등, tools/relations.py) — 역방향 전수
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import relations
+    auto = relations.by_law(a.name, jo)
+    if not hits and not auto:
+        raise SystemExit(f"❌ {a.name} {jo or ''}에 매핑된 통제·관련 항목 없음.")
+    print(f"=== {a.name} {jo or '(전체)'} ← 관련 통제 {len(hits)}건 (검수된 크로스매핑) ===\n")
     for c in hits:
         print(_row(c)); print()
+    if auto:
+        print(f"=== {a.name} {jo or '(전체)'} ← 인증기준 원문에 '관련 법규'로 적힌 항목 {len(auto)}건 (자동 추출) ===")
+        print("    ✅=현행 원문 조문 제목과 일치 · ⚠️ 제목 다름/❌ 없음=인용 전 원문 확인")
+        for r in sorted(auto, key=lambda r: [int(x) for x in r["from"]["id"].split(".")]):
+            print("  " + relations.fmt(r))
 
 
 def cmd_validate(_):
