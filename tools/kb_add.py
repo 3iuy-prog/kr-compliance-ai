@@ -49,6 +49,10 @@ def download(url: str, dest: Path) -> None:
 
 
 def main():
+    # Windows 콘솔(cp949)에서 이모지·특수문자 출력 시 UnicodeEncodeError 방지
+    for s in (sys.stdout, sys.stderr):
+        if hasattr(s, "reconfigure"):
+            s.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="URL→다운로드→RAG 인그레스트")
     ap.add_argument("urls", nargs="+")
     ap.add_argument("--collection", required=True)

@@ -13,6 +13,7 @@ data/crossmap.json 을 조회해 통제↔규제 매핑을 표로 반환.
 from __future__ import annotations
 import argparse
 import json
+import sys
 from pathlib import Path
 
 DB = Path(__file__).resolve().parent.parent / "data" / "crossmap.json"
@@ -128,6 +129,10 @@ def cmd_isms(a):
 
 
 def main():
+    # Windows 콘솔(cp949)에서 이모지·특수문자 출력 시 UnicodeEncodeError 방지
+    for s in (sys.stdout, sys.stderr):
+        if hasattr(s, "reconfigure"):
+            s.reconfigure(encoding="utf-8", errors="replace")
     if not DB.exists():
         raise SystemExit(f"❌ {DB} 없음.")
     ap = argparse.ArgumentParser(description="크로스매핑 조회 (P2)")

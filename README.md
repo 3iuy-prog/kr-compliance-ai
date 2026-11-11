@@ -41,6 +41,7 @@ flowchart TB
 ```bash
 git clone https://github.com/3iuy-prog/kr-compliance-ai compliance-ai && cd compliance-ai
 python3 -m pip install --user -r requirements.txt      # pypdf (RAG용)
+python3 -m pip install --user sentence-transformers    # (선택) RAG 의미검색 — 약 3GB + 모델 2.3GB
 mkdir -p ~/.claude/skills && ln -s "$PWD/skills/legal-answer" ~/.claude/skills/legal-answer   # /legal-answer 스킬 전역 등록
 echo "export COMPLIANCE_AI_HOME=\"$PWD\"" >> ~/.zshrc && source ~/.zshrc                              # 스킬이 저장소 도구를 찾는 경로 (bash면 ~/.bashrc)
 ```
@@ -110,7 +111,7 @@ python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 |---|---|---|
 | [tools/legalize.py](tools/legalize.py) | 법령 조회·개정이력·diff | `python3 tools/legalize.py show 개인정보보호법 --jo 29 --as-of 2026-07-16` |
 | [tools/crossmap.py](tools/crossmap.py) | 통제↔법령 크로스매핑 | `python3 tools/crossmap.py by-law 개인정보보호법 --jo 29` |
-| [tools/rag.py](tools/rag.py) | PDF 지식베이스 검색 | `python3 tools/rag.py search "접속기록 보관" --collection isms` |
+| [tools/rag.py](tools/rag.py) | PDF 지식베이스 검색(키워드+의미 하이브리드) | `python3 tools/rag.py search "접속기록 보관" --collection isms` |
 | [tools/kb_add.py](tools/kb_add.py) | URL→다운로드→인그레스트 | `python3 tools/kb_add.py "<url>" --collection fsec` |
 
 - `legalize.py`는 최신 공포본이 아직 시행 전이면 **⚠️ 시행예정본 경고**를 냅니다. 오늘 현행본은 `--as-of <오늘>`로 조회해 주세요.
@@ -138,7 +139,7 @@ python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 | **pypdf** | [pypi.org/project/pypdf](https://pypi.org/project/pypdf/) | PDF 텍스트 추출 | BSD |
 | **Claude Code / Agent SDK** | [claude.com/claude-code](https://claude.com/claude-code) | 실행 환경·오케스트레이션 | Anthropic |
 
-> 도구(`tools/`)는 순수 파이썬 stdlib 기반입니다(RAG의 PDF 처리만 pypdf 필요). 임베딩 모델·외부 API 키 없이 오프라인으로 동작합니다.
+> 도구(`tools/`)는 순수 파이썬 stdlib 기반입니다(RAG의 PDF 처리만 pypdf 필요). 외부 API 키 없이 오프라인으로 동작합니다. `sentence-transformers`를 설치하면 RAG가 로컬 임베딩으로 의미검색을 더하며, 별도 임베딩 API는 필요 없습니다. 단, 검색 결과와 Claude Code가 읽는 문서는 답변 생성을 위해 Anthropic API로 전송되므로, 사내 문서를 넣을 때는 조직의 AI 사용 정책을 확인해 주세요.
 
 ---
 
