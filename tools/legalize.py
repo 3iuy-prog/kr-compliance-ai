@@ -188,7 +188,7 @@ def _commit_at(rel: str, at: str | None) -> tuple[str, str]:
 def cmd_analyze(a):
     """개정 1건을 조문별 신설/삭제/개정으로 구조화 (P3 LLM 입력)."""
     p = law_path(a.name, a.kind)
-    rel = str(p.relative_to(REPO))
+    rel = p.relative_to(REPO).as_posix()
     commit, date = _commit_at(rel, a.at)
     new = git("show", f"{commit}:{rel}")
     try:
@@ -249,7 +249,7 @@ def _inforce_commit(rel: str, as_of: str) -> dict | None:
 
 def cmd_show(a):
     p = law_path(a.name, a.kind)
-    rel = str(p.relative_to(REPO))
+    rel = p.relative_to(REPO).as_posix()
     banner = ""
     if a.as_of:  # 그 날짜에 시행 중이던 버전 선택
         v = _inforce_commit(rel, a.as_of)
@@ -288,7 +288,7 @@ def cmd_sync(_):
 
 def cmd_history(a):
     p = law_path(a.name, a.kind)
-    rel = p.relative_to(REPO)
+    rel = p.relative_to(REPO).as_posix()
     log = git("log", "--format=%h | %ci | %s", "--", str(rel))
     print(f"=== 개정이력: {a.name} ({a.kind}) ===")
     print("커밋   | 공포일자                  | 내용")
@@ -297,7 +297,7 @@ def cmd_history(a):
 
 def cmd_diff(a):
     p = law_path(a.name, a.kind)
-    rel = str(p.relative_to(REPO))
+    rel = p.relative_to(REPO).as_posix()
     if a.at:  # 특정 개정일 커밋의 변경분
         h = git("log", "--format=%H", f"--since={a.at} 00:00", f"--until={a.at} 23:59",
                 "--", rel).split()
