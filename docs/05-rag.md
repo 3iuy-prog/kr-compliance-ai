@@ -21,7 +21,8 @@
 ## 사용
 ```bash
 python3 -m pip install --user pypdf          # PDF 처리 시 1회
-python3 tools/rag.py ingest <파일...> --collection isms   # 로컬 pdf/txt/md
+python3 tools/rag.py ingest <파일...> --collection isms   # 로컬 pdf/txt/md — 컬렉션을 새로 만듦(기존이면 덮어씀, 경고 출력)
+python3 tools/rag.py ingest <파일...> --collection isms --append   # 기존 컬렉션에 추가(새 청크만 임베딩)
 python3 tools/rag.py search "접속기록 보관 기간" --collection isms -k 5   # 기본 --mode auto
 python3 tools/rag.py search "로그 보관 기간" "접속기록 보관" --collection isms   # 여러 질의 한 번에(모델 1회 로드)
 python3 tools/rag.py search "2.5.4" --collection isms --mode tfidf          # 백엔드 강제(auto|hybrid|dense|tfidf)
@@ -35,11 +36,16 @@ python3 tools/rag.py drop --collection isms
   - 인덱싱: 모델 로드 약 10초 + 임베딩 청크당 약 0.6초. 실측: ISMS-P 안내서 2023.11.23판(264쪽, 484청크) **약 7분**(다른 작업과 CPU 공유 상태). 문서 추가 시 1회성. `ingest`·`reindex`는 끝에 소요 시간을 출력한다.
   - `reindex`(TF-IDF만): 484청크 0.8초.
   - 검색: 호출마다 torch·모델 로드로 **약 11초 고정 비용** + 질의당 약 0.1초. 그래서 질의 여러 개는 한 호출에 넘긴다(`search "q1" "q2" "q3"` → 3개도 약 11초). TF-IDF 모드는 약 0.3초.
-  - 주의: `ingest`는 컬렉션을 통째로 다시 만든다. 기존 컬렉션에 PDF 1개를 더하려면 전체 파일을 다시 넣어야 하므로 기존 청크도 다시 임베딩된다.
+- **문서 추가 `--append`**: 기존 청크·임베딩은 그대로 두고 새 파일의 청크만 임베딩해 덧붙인다(PDF 1권 추가 비용 = 그 PDF 임베딩 시간만).
+  - 같은 파일명이 이미 있으면 그 파일의 청크만 교체(같은 파일을 두 번 넣어도 중복되지 않음). 개정판은 파일명을 바꾸면 둘 다 남는다.
+  - 기존 컬렉션과 다른 임베딩 모델(`--model`)이나 `--no-dense`로는 추가할 수 없다(임베딩이 섞이면 검색이 깨짐) — 전체 파일로 다시 `ingest`.
+  - 기존 컬렉션이 TF-IDF 전용이면 추가분도 TF-IDF만. 의미검색을 켜려면 전체 파일로 다시 `ingest`.
+  - 컬렉션이 없으면 새로 만든다.
 - 검색 결과의 `(키워드 N위 · 의미 M위)`로 어느 백엔드가 찾았는지 확인할 수 있다.
 
 ## URL에서 바로 확보: kb_add ([tools/kb_add.py](../tools/kb_add.py))
 웹에서 찾은 가이드/고시 PDF를 다운로드+인그레스트 한 번에. discover→ingest→answer 루프의 중간 단계.
+기존 컬렉션에 **추가**한다(`ingest --append`) — 이미 들어 있는 문서는 유지된다. (2026-11-11 이전에는 컬렉션을 새 파일 하나로 덮어썼다.)
 ```bash
 python3 tools/kb_add.py <PDF_URL> --collection sec_measures --name 안내서.pdf
 ```
