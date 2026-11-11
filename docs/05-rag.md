@@ -26,6 +26,8 @@ python3 tools/rag.py ingest <파일...> --collection isms --append   # 기존 �
 python3 tools/rag.py search "접속기록 보관 기간" --collection isms -k 5   # 기본 --mode auto
 python3 tools/rag.py search "로그 보관 기간" "접속기록 보관" --collection isms   # 여러 질의 한 번에(모델 1회 로드)
 python3 tools/rag.py search "2.5.4" --collection isms --mode tfidf          # 백엔드 강제(auto|hybrid|dense|tfidf)
+python3 tools/rag.py show --collection isms --chunk 244            # 원문 전체(앞뒤 1청크 포함, --context N)
+python3 tools/rag.py show --collection isms --page 146             # 페이지 원문(조문 단위 컬렉션은 --page 제29조 --source 개인정보보호법)
 python3 tools/rag.py list
 python3 tools/rag.py reindex --collection isms   # TF-IDF만 재생성(임베딩 유지) — 토큰화 규칙 변경 후
 python3 tools/rag.py drop --collection isms
@@ -42,6 +44,10 @@ python3 tools/rag.py drop --collection isms
   - 기존 컬렉션이 TF-IDF 전용이면 추가분도 TF-IDF만. 의미검색을 켜려면 전체 파일로 다시 `ingest`.
   - 컬렉션이 없으면 새로 만든다.
 - 검색 결과의 `(키워드 N위 · 의미 M위)`로 어느 백엔드가 찾았는지 확인할 수 있다.
+- **검색 결과 → 답변 근거**: `search`는 청크 전문을 출력한다(사람이 훑어볼 때만 `--brief`로 앞 240자).
+  청크는 800자 단위라 표·문장이 경계에서 잘릴 수 있으므로, 인용·숫자 확인은 `show`로 한다. `show`는 앞뒤 청크의 겹친 부분(150자)을 한 번만 이어 붙이고, 페이지가 바뀌면 `p.N`별로 나눠 출력한다.
+  - 2026-11-11 이전에는 `search`가 청크 앞 240자(평균 청크의 약 40%)만 출력해, 예컨대 "접속기록 보관 기간" 검색에서 정답 페이지는 찾고도 보존 기간(1년/2년 이상)은 Claude에게 전달되지 않았다.
+  - 알려진 잡음: 안내서 PDF의 옆면 탭 글자("1 관 리 체 계 …")가 페이지 첫 청크에 섞여 있다(추후 ingest 시 제거 예정).
 
 ## URL에서 바로 확보: kb_add ([tools/kb_add.py](../tools/kb_add.py))
 웹에서 찾은 가이드/고시 PDF를 다운로드+인그레스트 한 번에. discover→ingest→answer 루프의 중간 단계.
@@ -113,3 +119,5 @@ python3 tools/rag_eval.py --reuse --weights 0,0.25,0.5,1       # 키워드 가�
 - 법령·안내서 구조(조문/항목 헤더) 인지 청킹 — 현재는 문단 800자 단위.
 - 컬렉션 예: `isms`(인증기준), `efin`(전자금융기반시설 점검항목), `fsec`(금융보안원 가이드).
 - RAG 결과 스니펫을 crossmap 항목과 자동 링크.
+- PDF 옆면 탭 글자 등 반복 잡음을 ingest 시 제거.
+- `--collection` 생략 시 전체 컬렉션 검색.

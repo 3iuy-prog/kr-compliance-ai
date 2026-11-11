@@ -16,6 +16,8 @@
   python tools/rag.py ingest <파일...> --collection isms      # PDF/txt/md 흡수(기존 컬렉션 덮어씀)
   python tools/rag.py ingest <파일...> --collection isms --append   # 기존에 추가(새 청크만 임베딩)
   python tools/rag.py search "접속기록 보관 기간" --collection isms -k 5 [--mode auto|hybrid|dense|tfidf]
+  python tools/rag.py show --collection isms --chunk 245 [--context 1]   # 원문 전체(앞뒤 청크 포함)
+  python tools/rag.py show --collection isms --page 146                  # 페이지 원문
   python tools/rag.py list
   python tools/rag.py drop --collection isms
 
@@ -352,8 +354,54 @@ def cmd_search(a):
             ranks = ""
             if mode == "hybrid":
                 ranks = f" (키워드 {h['tfidf_rank'] or '-'}위 · 의미 {h['dense_rank'] or '-'}위)"
-            snippet = re.sub(r"\s+", " ", c["text"])[:240]
-            print(f"\n[{h['score']:.3f}] {c['source']} p.{c['page']} (chunk {c['id']}){ranks}\n  {snippet}…")
+            text = re.sub(r"\s+", " ", c["text"]).strip()
+            if a.brief:                       # 사람이 훑어볼 때만. 답변 근거로는 전문을 쓴다
+                text = text[:240] + ("…" if len(text) > 240 else "")
+            print(f"\n[{h['score']:.3f}] {c['source']} p.{c['page']} (chunk {c['id']}){ranks}\n  {text}")
+
+
+def _merge_overlap(prev: str, nxt: str, max_overlap: int = 400) -> str:
+    """연속 청크를 이어 붙인다. chunk()가 앞 청크 끝(overlap)을 다음 청크 앞에 복사하므로 겹친 부분은 한 번만."""
+    for k in range(min(len(prev), len(nxt), max_overlap), 0, -1):
+        if prev.endswith(nxt[:k]):
+            return prev + nxt[k:]
+    return prev + "\n" + nxt
+
+
+def cmd_show(a):
+    """청크 번호(앞뒤 context개 포함) 또는 페이지로 원문 전체를 출력. 원문 인용·검증용."""
+    col = load_collection(a.collection)
+    chunks = col["chunks"]
+    if a.chunk is not None:
+        if not 0 <= a.chunk < len(chunks):
+            raise SystemExit(f"❌ chunk {a.chunk} 없음 (0~{len(chunks) - 1})")
+        src = chunks[a.chunk]["source"]
+        ids = [i for i in range(a.chunk - a.context, a.chunk + a.context + 1)
+               if 0 <= i < len(chunks) and chunks[i]["source"] == src]
+    else:
+        srcs = sorted({c["source"] for c in chunks if str(c["page"]) == a.page})
+        if not srcs:
+            raise SystemExit(f"❌ p.{a.page} 청크 없음")
+        if len(srcs) > 1 and not a.source:
+            raise SystemExit(f"❌ p.{a.page}가 여러 출처에 있음 — --source로 지정: {srcs}")
+        src = a.source or srcs[0]
+        ids = [i for i, c in enumerate(chunks) if c["source"] == src and str(c["page"]) == a.page]
+        if not ids:
+            raise SystemExit(f"❌ {src} p.{a.page} 청크 없음")
+    # 페이지가 바뀌는 곳은 이어 붙이지 않고 페이지별로 나눠 출력(인용 시 쪽수 표기용)
+    groups: list[tuple[int, list[int]]] = []
+    for i in ids:
+        if groups and groups[-1][0] == chunks[i]["page"]:
+            groups[-1][1].append(i)
+        else:
+            groups.append((chunks[i]["page"], [i]))
+    print(f"=== {a.collection} · {src} ===")
+    for page, gids in groups:
+        text = chunks[gids[0]]["text"]
+        for i in gids[1:]:
+            text = _merge_overlap(text, chunks[i]["text"])
+        mark = " ← 요청" if a.chunk is not None and a.chunk in gids else ""
+        print(f"\n--- p.{page} (chunk {gids[0]}{'–' + str(gids[-1]) if len(gids) > 1 else ''}){mark} ---\n{text.strip()}")
 
 
 def cmd_list(_):
@@ -405,9 +453,19 @@ def main():
     s.add_argument("query", nargs="+", help="질의(여러 개면 모델을 한 번만 로드해 차례로 검색)")
     s.add_argument("--collection", required=True)
     s.add_argument("-k", type=int, default=5)
+    s.add_argument("--brief", action="store_true", help="청크 앞 240자만(사람이 훑어볼 때). 기본은 전문")
     s.add_argument("--mode", choices=["auto", "hybrid", "dense", "tfidf"], default="auto",
                    help="auto=임베딩 있으면 hybrid, 없으면 tfidf")
     s.set_defaults(func=cmd_search)
+
+    s = sub.add_parser("show", help="원문 보기(청크 번호+앞뒤 또는 페이지) — 인용·검증용")
+    s.add_argument("--collection", required=True)
+    g = s.add_mutually_exclusive_group(required=True)
+    g.add_argument("--chunk", type=int, help="search 결과의 chunk 번호")
+    g.add_argument("--page", help="페이지 번호(해당 페이지 청크 전부). 조문 단위 컬렉션은 \"제29조\" 등")
+    s.add_argument("--context", type=int, default=1, help="--chunk 앞뒤로 함께 볼 청크 수(기본 1)")
+    s.add_argument("--source", help="--page가 여러 출처에 있을 때 파일명")
+    s.set_defaults(func=cmd_show)
 
     sub.add_parser("list", help="컬렉션 목록").set_defaults(func=cmd_list)
 
