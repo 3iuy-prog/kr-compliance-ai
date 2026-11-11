@@ -15,6 +15,10 @@
    "no_article": 5,
    "no_source": 2
   },
+  "integrity": {
+   "items": 101,
+   "issues": []
+  },
   "note": "status는 원문 조문 제목 자동 대조 결과. verified 외는 근거로 쓰기 전 원문 확인."
  },
  "relations": [

@@ -182,7 +182,62 @@ def extract_isms(md: Path) -> list[dict]:
     return rels
 
 
+def check_items(md: Path, item_re=None) -> tuple[dict[str, int], list[str]]:
+    """항목 인식 정합성 검사 — 변환이 머리말 표를 깨뜨려 항목이 조용히 빠지는 것을 잡는다.
+    (2026-11-11 docling이 3.5.2 머리말을 '| 항 | 목 3.5.2 … |'로 나눠 3.5.2가 빠졌던 일의 재발 감지)
+      1) 번호 빈칸: 같은 분야 안에서 1..최댓값이 다 있는지(3.5.1 다음 3.5.3이면 3.5.2 누락), 분야 번호도 같은 방식
+      2) '관련 법규' 칸이 한 항목에 2개 이상: 다음 항목 머리말을 놓친 흔적
+      3) 기준 목록: data/isms_p.json의 영역별 항목 수와 비교
+    반환: ({항목: 쪽}, [문제])"""
+    import rag
+    rx = item_re or rag.ITEM_RE
+    items: dict[str, int] = {}
+    rows: Counter = Counter()
+    cur = None
+    for page, text in rag.extract_text(md):
+        for line in text.splitlines():
+            m = rx.match(line)
+            if m:
+                cur = m.group(1)
+                items.setdefault(cur, page)
+            elif line.startswith("| 관련 법규 |"):
+                rows[cur] += 1
+    issues = []
+    groups: dict[str, set[int]] = {}
+    for code in items:
+        pre, last = code.rsplit(".", 1)
+        groups.setdefault(pre, set()).add(int(last))
+    for pre, nums in sorted(groups.items()):
+        for n in range(1, max(nums) + 1):
+            if n not in nums:
+                prev = f"{pre}.{n - 1}"
+                nxt = next(f"{pre}.{k}" for k in range(n + 1, max(nums) + 1) if k in nums)
+                issues.append(f"항목 번호 빈칸 {pre}.{n} — {prev}(p.{items.get(prev, '?')})와 "
+                              f"{nxt}(p.{items[nxt]}) 사이 쪽의 항목 머리말 확인")
+    cats: dict[str, set[int]] = {}
+    for pre in groups:
+        a, b = pre.split(".", 1) if "." in pre else (pre, "0")
+        if b.isdigit():
+            cats.setdefault(a, set()).add(int(b))
+    for a, bs in sorted(cats.items()):
+        issues += [f"분야 번호 빈칸 {a}.{b}" for b in range(1, max(bs) + 1) if b not in bs]
+    for code, n in rows.items():
+        if code is None:
+            issues.append(f"항목 머리말 없이 나온 '관련 법규' 칸 {n}개")
+        elif n > 1:
+            issues.append(f"{code}에 '관련 법규' 칸 {n}개 — 그 뒤 항목 머리말을 놓쳤을 가능성")
+    ref = ROOT / "data" / "isms_p.json"
+    if ref.exists():
+        d = json.loads(ref.read_text(encoding="utf-8"))
+        for dom in d.get("domains", []):
+            got = sum(1 for c in items if c.split(".")[0] == dom["id"])
+            if got != dom["count"]:
+                issues.append(f"{dom['id']}영역 항목 {got}/{dom['count']}개 (기준: isms_p.json {d['_meta'].get('version', '')})")
+    return items, issues
+
+
 EXTRACTORS = [("isms_related_laws", _is_isms, extract_isms)]
+CHECKS = {"isms_related_laws": check_items}
 
 
 def extract_auto(md: Path, quiet: bool = False) -> Path | None:
@@ -192,12 +247,21 @@ def extract_auto(md: Path, quiet: bool = False) -> Path | None:
         if not detect(text):
             continue
         rels = fn(md)
+        items, issues = CHECKS[name](md) if name in CHECKS else ({}, [])
+        if not quiet and name in CHECKS:
+            if issues:
+                print(f"⚠️ 항목 정합성 문제 {len(issues)}건(인식 항목 {len(items)}개) — kb-table-verify 스킬로 해당 쪽 대조·교정:")
+                for i in issues:
+                    print(f"   - {i}")
+            else:
+                print(f"🔎 항목 정합성: {len(items)}개 인식 · 번호 빈칸·중복·기준 목록 불일치 없음")
         REL_DIR.mkdir(parents=True, exist_ok=True)
         out = REL_DIR / f"{md.stem}.json"
         st = Counter(r["status"] for r in rels)
         meta = {"source": md.name, "extractor": name, "extracted": datetime.date.today().isoformat(),
                 "basis": sorted({r["basis"] for r in rels if r.get("basis")}),
                 "legalize": _cache.get("legalize_head", "사용 안 함"), "status_count": dict(st),
+                "integrity": {"items": len(items), "issues": issues},
                 "note": "status는 원문 조문 제목 자동 대조 결과. verified 외는 근거로 쓰기 전 원문 확인."}
         out.write_text(json.dumps({"_meta": meta, "relations": rels}, ensure_ascii=False, indent=1),
                        encoding="utf-8")
@@ -242,6 +306,15 @@ def cmd_extract(a):
         raise SystemExit("❌ 이 문서에 맞는 관계 추출기가 없음(현재: ISMS-P 안내서 '관련 법규')")
 
 
+def cmd_check(a):
+    items, issues = check_items(Path(a.md))
+    print(f"인식 항목 {len(items)}개 · 문제 {len(issues)}건")
+    for i in issues:
+        print(f"  - {i}")
+    if issues:
+        raise SystemExit(1)
+
+
 def cmd_by_law(a):
     hits = by_law(a.name, a.jo)
     print(f"=== {a.name} {a.jo or ''} ← 원문에 '관련 법규'로 적힌 항목 {len(hits)}건 (자동 추출) ===")
@@ -269,6 +342,8 @@ def main():
     ap = argparse.ArgumentParser(description="문서 관계 추출·조회")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("extract"); s.add_argument("md"); s.set_defaults(func=cmd_extract)
+    s = sub.add_parser("check", help="항목 인식 정합성(번호 빈칸·칸 중복·기준 목록)")
+    s.add_argument("md"); s.set_defaults(func=cmd_check)
     s = sub.add_parser("by-law"); s.add_argument("name"); s.add_argument("--jo"); s.set_defaults(func=cmd_by_law)
     s = sub.add_parser("by-item"); s.add_argument("code"); s.set_defaults(func=cmd_by_item)
     sub.add_parser("list").set_defaults(func=cmd_list)
