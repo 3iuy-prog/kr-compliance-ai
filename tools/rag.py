@@ -41,6 +41,9 @@ DEFAULT_MODEL = os.environ.get("RAG_EMBED_MODEL", "nlpai-lab/KURE-v1")
 RRF_K = 60           # RRF 상수(표준값). 순위 r의 기여 = 1/(RRF_K + r)
 POOL = 50            # 하이브리드 결합 전 각 백엔드에서 가져올 후보 수
 TFIDF_WEIGHT = 0.25  # RRF에서 키워드 순위 가중치(의미 = 1.0). rag_eval.py 그리드 결과 — docs/05-rag.md
+PAGE_RE = re.compile(r"^<!-- p\.(\d+) -->[ \t]*$", re.M)     # tools/pdf2md.py의 쪽 표시
+CODE_QUERY = re.compile(r"\d+(?:\.\d+){1,3}")                # 질의 전체가 항목번호인지
+ITEM_RE = re.compile(r"^\|\s*항\s*목\s*\|\s*(\d+(?:\.\d+)+)\s*([^|\n]*)\|")  # ISMS-P 등 항목 머리말 표
 
 
 # ---------- 텍스트 추출 ----------
@@ -55,8 +58,18 @@ def extract_text(path: Path) -> list[tuple[int, str]]:
         reader = PdfReader(str(path))
         return [(i + 1, (pg.extract_text() or "")) for i, pg in enumerate(reader.pages)]
     if suf in (".txt", ".md"):
-        return [(1, path.read_text(encoding="utf-8", errors="ignore"))]
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        parts = PAGE_RE.split(text)           # pdf2md.py 출력: [머리말, 쪽, 본문, 쪽, 본문, ...]
+        if len(parts) > 1:
+            return [(int(parts[i]), parts[i + 1]) for i in range(1, len(parts), 2)]
+        return [(1, text)]
     raise SystemExit(f"❌ 지원 안 함: {suf} (pdf/txt/md만. HWP는 텍스트 변환 후 투입)")
+
+
+def is_paged_md(path: Path) -> bool:
+    """tools/pdf2md.py가 만든(쪽 표시가 있는) Markdown인지."""
+    return path.suffix.lower() == ".md" and bool(
+        PAGE_RE.search(path.read_text(encoding="utf-8", errors="ignore")[:4000]))
 
 
 # ---------- 청킹 ----------
@@ -76,6 +89,70 @@ def chunk(text: str, size: int = 800, overlap: int = 150) -> list[str]:
     if buf:
         out.append(buf)
     return out
+
+
+def _split_table(block: str, size: int) -> list[str]:
+    """긴 md 표는 행 경계에서 나누고 조각마다 머리행을 반복한다(행이 잘리거나 열 이름이 사라지지 않게)."""
+    lines = block.split("\n")
+    head = lines[:2] if len(lines) > 1 and re.fullmatch(r"\|[\s:|-]+\|?", lines[1]) else []
+    rows, out, cur = lines[len(head):], [], []
+    for r in rows:
+        if cur and len("\n".join(head + cur + [r])) > size:
+            out.append("\n".join(head + cur)); cur = []
+        cur.append(r)
+    if cur:
+        out.append("\n".join(head + cur))
+    return out
+
+
+def chunk_md(pages: list[tuple[int, str]], size: int = 800) -> list[dict]:
+    """pdf2md.py 출력용 구조 단위 청킹. 청크는 쪽을 넘지 않는다(인용 쪽수 정확).
+    - 항목 머리말 표(| 항 목 | 2.5.4 비밀번호 관리 |)를 만나면 새 청크, 이후 청크의 section으로 유지(쪽이 바뀌어도)
+    - 소제목(#)에서 새 청크(앞 청크가 아주 짧으면 붙임), 문단·표는 중간에서 자르지 않는다
+    - size를 넘는 표는 행 단위로 나누고 머리행 반복, 긴 문단은 chunk()로 분할
+    반환: [{page, text, section}]"""
+    out: list[dict] = []
+    item, heading = "", ""
+
+    def section():
+        return " > ".join(x for x in (item, heading) if x)
+
+    for page, text in pages:
+        blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
+        cur: list[str] = []
+        cur_sec = section()
+
+        def flush():
+            nonlocal cur
+            if cur:
+                out.append({"page": page, "text": "\n\n".join(cur), "section": cur_sec})
+            cur = []
+
+        for b in blocks:
+            m = ITEM_RE.match(b)
+            if m:                                   # 새 인증기준 항목
+                flush()
+                item, heading = f"{m.group(1)} {m.group(2).strip()}", ""
+                cur_sec = section()
+            elif b.startswith("#"):
+                if sum(map(len, cur)) > 150:
+                    flush()
+                heading = b.lstrip("#").strip()
+                if not cur:
+                    cur_sec = section()
+            pieces = (_split_table(b, size) if b.startswith("|") else
+                      chunk(b, size) if len(b) > size else [b])
+            for piece in pieces:
+                if cur and sum(map(len, cur)) + len(piece) + 2 > size:
+                    flush(); cur_sec = section()
+                cur.append(piece)
+        flush()
+    return [c for c in out if len(c["text"]) >= 30]
+
+
+def index_text(c: dict) -> str:
+    """검색 인덱스에 넣는 텍스트. 소속 항목·소제목을 앞에 붙여 '2.9.4'나 '결함사례' 같은 질의가 본문에 없어도 찾게."""
+    return f"[{c['section']}]\n{c['text']}" if c.get("section") else c["text"]
 
 
 # ---------- 키워드 백엔드: 문자 n-gram TF-IDF(해시) ----------
@@ -166,7 +243,7 @@ def write_collection(name: str, chunks: list[dict], model: str | None, dense=Non
     d = col_dir(name); d.mkdir(parents=True, exist_ok=True)
     for i, c in enumerate(chunks):
         c["id"] = i
-    texts = [c["text"] for c in chunks]
+    texts = [index_text(c) for c in chunks]
     idf, vecs = build_tfidf(texts)
     dense_model = None
     if model:
@@ -193,7 +270,7 @@ def reindex_tfidf(name: str) -> int:
     d = col_dir(name)
     idx = json.loads((d / "index.json").read_text(encoding="utf-8"))
     chunks = [json.loads(l) for l in (d / "chunks.jsonl").read_text(encoding="utf-8").splitlines() if l]
-    idf, vecs = build_tfidf([c["text"] for c in chunks])
+    idf, vecs = build_tfidf([index_text(c) for c in chunks])
     idx.update({"idf": {str(k): v for k, v in idf.items()}, "vecs": vecs})
     (d / "index.json").write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
     return len(chunks)
@@ -239,10 +316,16 @@ def _rank_dense(col: dict, query: str) -> list[tuple[float, int]]:
     return [(float(sims[i]), int(i)) for i in order]
 
 
+def query_mode(query: str, mode: str) -> str:
+    """질의 전체가 항목번호("2.5.4")면 키워드만 쓴다. 의미검색은 번호를 구별 못 해 목차 페이지를 올리고,
+    RRF로 섞으면 키워드의 정답(isms_md 평가 hit@1 100%)을 끌어내린다. 법률 조문번호는 해당 없음."""
+    return "tfidf" if mode == "hybrid" and CODE_QUERY.fullmatch(query.strip()) else mode
+
+
 def search(col: dict, query: str, k: int = 5, mode: str = "auto",
            tfidf_weight: float = TFIDF_WEIGHT) -> list[dict]:
     """[{chunk, score, tfidf_rank, dense_rank}] 상위 k. mode는 resolve_mode 거친 값이어도 됨."""
-    mode = resolve_mode(col, mode)
+    mode = query_mode(query, resolve_mode(col, mode))
     tf = _rank_tfidf(col, query) if mode in ("tfidf", "hybrid") else []
     de = _rank_dense(col, query) if mode in ("dense", "hybrid") else []
     tf_rank = {i: r for r, (_, i) in enumerate(tf, 1)}
@@ -273,6 +356,9 @@ def _read_files(files: list[str]) -> list[dict]:
         p = Path(f)
         if not p.exists():
             print(f"⚠️ 없음: {p}"); continue
+        if is_paged_md(p):                    # pdf2md.py 출력: 항목·소제목 단위 청킹
+            chunks += [{"source": p.name, **c} for c in chunk_md(extract_text(p))]
+            continue
         for page, text in extract_text(p):
             for c in chunk(text):
                 if len(c) >= 30:
@@ -337,7 +423,7 @@ def _append(a, new: list[dict]) -> dict:
     if len(old) != len(col["chunks"]):
         raise SystemExit("❌ 기존 임베딩과 청크 수가 어긋남 — 전체 파일로 다시 ingest 필요")
     print(f"🧠 새 청크만 임베딩: {model} ({len(new)}개, 기존 {len(kept)}개 유지)")
-    emb = dense_encode([c["text"] for c in new], model, show_progress=len(new) > 200)
+    emb = dense_encode([index_text(c) for c in new], model, show_progress=len(new) > 200)
     dense = np.vstack([old[keep], emb]) if keep else emb
     return write_collection(a.collection, kept + new, model, dense=dense)
 
@@ -348,16 +434,19 @@ def cmd_search(a):
     mode = resolve_mode(col, a.mode)
     for qi, query in enumerate(a.query):
         hits = search(col, query, a.k, mode)
-        print(f"{'' if qi == 0 else chr(10)}=== '{query}' @ {a.collection} [{mode}] — 상위 {a.k} ===")
+        qm = query_mode(query, mode)
+        label = f"{qm}: 항목번호 질의라 키워드만" if qm != mode else mode
+        print(f"{'' if qi == 0 else chr(10)}=== '{query}' @ {a.collection} [{label}] — 상위 {a.k} ===")
         for h in hits:
             c = h["chunk"]
             ranks = ""
-            if mode == "hybrid":
+            if qm == "hybrid":
                 ranks = f" (키워드 {h['tfidf_rank'] or '-'}위 · 의미 {h['dense_rank'] or '-'}위)"
             text = re.sub(r"\s+", " ", c["text"]).strip()
             if a.brief:                       # 사람이 훑어볼 때만. 답변 근거로는 전문을 쓴다
                 text = text[:240] + ("…" if len(text) > 240 else "")
-            print(f"\n[{h['score']:.3f}] {c['source']} p.{c['page']} (chunk {c['id']}){ranks}\n  {text}")
+            sec = f" [{c['section']}]" if c.get("section") else ""
+            print(f"\n[{h['score']:.3f}] {c['source']} p.{c['page']} (chunk {c['id']}){sec}{ranks}\n  {text}")
 
 
 def _merge_overlap(prev: str, nxt: str, max_overlap: int = 400) -> str:
@@ -365,7 +454,7 @@ def _merge_overlap(prev: str, nxt: str, max_overlap: int = 400) -> str:
     for k in range(min(len(prev), len(nxt), max_overlap), 0, -1):
         if prev.endswith(nxt[:k]):
             return prev + nxt[k:]
-    return prev + "\n" + nxt
+    return prev + "\n\n" + nxt                # 겹침 없음(md 구조 청크): 문단 구분 유지
 
 
 def cmd_show(a):
@@ -401,7 +490,9 @@ def cmd_show(a):
         for i in gids[1:]:
             text = _merge_overlap(text, chunks[i]["text"])
         mark = " ← 요청" if a.chunk is not None and a.chunk in gids else ""
-        print(f"\n--- p.{page} (chunk {gids[0]}{'–' + str(gids[-1]) if len(gids) > 1 else ''}){mark} ---\n{text.strip()}")
+        items = list(dict.fromkeys((chunks[i].get("section") or "").split(" > ")[0] for i in gids))
+        sec = f" [{' | '.join(s for s in items if s)}]" if any(items) else ""
+        print(f"\n--- p.{page} (chunk {gids[0]}{'–' + str(gids[-1]) if len(gids) > 1 else ''}){sec}{mark} ---\n{text.strip()}")
 
 
 def cmd_list(_):
