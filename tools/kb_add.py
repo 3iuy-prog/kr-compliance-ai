@@ -73,8 +73,8 @@ def to_markdown(pdf: Path) -> Path | None:
             print(f"       p.{i['page']}: {i['words'][:8]}")
     tw = rep.get("table_warnings") or {}
     if tw:                                     # 누락률과 무관하게 알림: 버려진 셀은 실제 내용 손실
-        print(f"    ⚠️ 표 셀 누락 {len(tw)}쪽 {sorted(map(int, tw))} — 해당 청크는 검색·show 결과에 경고가 붙고, "
-              f"답변 시 rag.py show --page N --raw로 원본과 대조한다.")
+        print(f"    ⚠️ 표 셀 누락 {len(tw)}쪽 {sorted(map(int, tw))} — 해당 청크는 검색·show 결과에 경고가 붙는다. "
+              f"kb-table-verify 스킬로 원본 PDF 쪽을 대조·교정하세요.")
     return md
 
 
