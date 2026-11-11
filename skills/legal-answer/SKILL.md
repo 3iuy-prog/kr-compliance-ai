@@ -36,9 +36,13 @@ description: 법률/컴플라이언스 질의에 표준 형식으로 답한다. 
 ### 의도별 도구 호출 (필수)
 - **MAPPING** → `python3 "$COMPLIANCE_AI_HOME/tools/crossmap.py" lookup <ISMS코드>` 또는 `search <키워드>` 또는 `by-law <법령> --jo <N>`.
   결과의 법령 조항 중 `✅`는 검증됨, `⚠️`(고시/ISMS-P 조번호)는 답변에서 "미검증"으로 표기하고 가능하면 MCP로 재확인.
+  `by-law`는 **검수된 통제**(crossmap.json)와 **인증기준 원문 '관련 법규'에서 자동 추출한 항목 전부**(data/relations, [docs/06-relations.md](../../docs/06-relations.md))를 함께 보여 준다.
+  자동 추출 항목은 `✅`(현행 원문 조문 제목 일치)만 확인된 것. `⚠️ 제목 다름`은 안내서 발간 뒤 개정 가능성 → 인용 시 **현행 제목**(출력의 '현행: …')을 쓰고 원문 조회로 확인. `❌ 현행 원문에 없음`은 근거로 쓰지 않는다.
+  crossmap에만 있고 안내서 '관련 법규'에 없는 연결(신용정보법·위치정보법 등)은 **프로젝트 판단**이지 인증기준 원문 근거가 아니다 — 답변에서 구분해 표기.
 - **AMENDMENT** → `python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" history <법령>` 로 개정일 확인 후
   `python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" analyze <법령> --at <YYYY-MM-DD> --detail 5` 로 신설/삭제/개정 조문 구조를 받아
   "변경 요약 + 영향 통제항목(crossmap 역매핑) + 대응 체크리스트"로 가공한다.
+  영향 항목은 **개정된 조문마다** `crossmap.py by-law <법령> --jo <N>`으로 뽑는다 — 자동 추출 관계로 인증기준 항목을 **빠짐없이** 볼 수 있다(RAG 검색으로 찾지 말 것: 상위 몇 개만 나온다).
   ⚠️ `analyze`는 **조(條) 단위**만 반환한다. 항(項)·호(號) 번호를 answer에 쓰려면 그 조문 원문을 실제로 조회한 뒤에만. analyze를 항 번호의 근거로 표기하지 말 것.
 - **DIAGNOSIS** → `rag.py search`로 업로드 문서 관련 인증기준 원문(주요 확인사항·결함사례) 검색 + crossmap으로 통제 매칭 후 gap 정리.
 - **인증기준 근거 인용 시**: RAG 결과는 출처·페이지(`source p.N`)를 함께 표기. RAG는 참고 검색이므로 규범적 단정은 원문(안내서) 확인 후.

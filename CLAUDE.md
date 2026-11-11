@@ -9,6 +9,7 @@
 - [docs/03-legalize-integration.md](docs/03-legalize-integration.md) — legalize-kr 연동(개정이력·diff), 헬퍼 [tools/legalize.py](tools/legalize.py)
 - [docs/04-p2-p3-implementation.md](docs/04-p2-p3-implementation.md) — P2 크로스매핑([tools/crossmap.py](tools/crossmap.py)) · P3 개정영향(analyze)
 - [docs/05-rag.md](docs/05-rag.md) — 범용 RAG(아무 PDF→지식베이스), 헬퍼 [tools/rag.py](tools/rag.py)
+- [docs/06-relations.md](docs/06-relations.md) — 인그레스트 시 관계 추출(ISMS-P 관련 법규 → 역방향 전수 조회), 헬퍼 [tools/relations.py](tools/relations.py)
 
 ## 대상 법률
 전자금융거래법(+시행령/규칙/세칙) · 정보통신망법(+시행령) · 신용정보법 · 개인정보보호법(+시행령+안전성확보조치) · 위치정보법 · 전자금융기반시설/주요정보통신기반시설 점검기준 · ISMS-P/ISO27001
