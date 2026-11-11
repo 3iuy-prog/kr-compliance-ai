@@ -7,3 +7,6 @@ pypdf>=6.0        # PDF 텍스트 추출 (RAG ingest)
 # 선택(의미검색): 설치하면 rag.py가 TF-IDF + 로컬 임베딩 하이브리드로 동작.
 # torch 포함 약 3GB + 첫 실행 시 모델(nlpai-lab/KURE-v1, 약 2.3GB) 다운로드. 미설치 시 TF-IDF만.
 # sentence-transformers>=3.0
+
+# 선택(PDF → Markdown, 권장): tools/pdf2md.py. 표·레이아웃 모델 첫 실행 시 다운로드.
+# docling>=2.0

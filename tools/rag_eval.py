@@ -10,6 +10,7 @@
   python tools/rag_eval.py --model BAAI/bge-m3  # 다른 임베딩 모델로 비교
   python tools/rag_eval.py -v                   # 질의별 정답 순위 출력
   python tools/rag_eval.py --spec data/rag_eval_isms.json   # 실제 ISMS-P 안내서 컬렉션(isms) 평가
+  python tools/rag_eval.py --spec data/rag_eval_isms.json --collection isms_md   # 같은 질의로 다른 컬렉션 비교
 
 전제: vendor/legalize-kr 클론(python tools/legalize.py sync).
 """
@@ -93,6 +94,7 @@ def main():
     ap.add_argument("--reuse", action="store_true", help="기존 _eval 인덱스 재사용")
     ap.add_argument("--modes", default="tfidf,dense,hybrid")
     ap.add_argument("--weights", help="hybrid의 TF-IDF 가중치 후보(쉼표 구분), 예: 0,0.25,0.5,1")
+    ap.add_argument("--collection", help="평가할 컬렉션(spec의 _meta.collection 대신). 예: isms_md")
     ap.add_argument("--spec", default=str(EVAL),
                     help="평가 세트. _meta.collection이 있으면 그 기존 컬렉션을 평가(재생성 안 함)")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -100,7 +102,7 @@ def main():
 
     spec = json.loads(Path(a.spec).read_text(encoding="utf-8"))
     queries = spec["queries"]
-    collection = spec["_meta"].get("collection", COLLECTION)
+    collection = a.collection or spec["_meta"].get("collection", COLLECTION)
     # 실제 KB 컬렉션(예: isms)은 rag.py ingest로 만든 것을 그대로 평가. _eval(법률)만 여기서 생성
     if collection == COLLECTION and not a.reuse:
         chunks = [c for law, rel in spec["_meta"]["corpus"].items() for c in law_chunks(law, rel)]
