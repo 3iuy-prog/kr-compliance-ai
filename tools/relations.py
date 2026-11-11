@@ -240,6 +240,89 @@ EXTRACTORS = [("isms_related_laws", _is_isms, extract_isms)]
 CHECKS = {"isms_related_laws": check_items}
 
 
+# ---------- 추출기: 시행령 → 법률 위임·근거 (legalize-kr) ----------
+DELEG_FILE = REL_DIR / "legalize_시행령_위임.json"
+LAW_REF = re.compile(r"(?<![가-힣])(?<!같은 )법 (제(\d+)조(?:의(\d+))?)((?:제\d+항)?)")
+DECREE_HEAD = re.compile(r"^#####\s*(제\d+조(?:의\d+)?)\s*\(([^)]*)\)", re.M)
+
+
+def _ref_kind(after: str) -> str:
+    """'법 제N조…' 뒤 문맥으로 관계 종류: 대통령령 위임 > 근거(에 따라) > 참조."""
+    sent = re.split(r"(?<=다)\.\s|\n", after, 1)[0][:160]
+    if re.search(r"대통령령으로\s*정하", sent):
+        return "대통령령 위임"
+    if re.match(r"[^가-힣]*(?:[가-힣\s·ㆍ]*?)(에 따라|에 의하여)", sent[:40]):
+        return "근거"
+    return "참조"
+
+
+def extract_delegations() -> Path:
+    """대상 5법의 시행령(오늘 기준 시행본)에서 '법 제N조' → (시행령 조 → 법률 조) 관계. 부칙 제외.
+    같은 쌍은 하나로 묶고 횟수·종류·항을 모은다. 법률 조문은 오늘 기준 시행본에 있는지 대조."""
+    import legalize
+    head = legalize_state()
+    rels, bases = [], []
+    for law in legalize.LAWS:
+        try:
+            p = legalize.law_path(law, "시행령")
+        except SystemExit:
+            continue
+        rel = p.relative_to(legalize.REPO).as_posix()
+        v = legalize._inforce_commit(rel, legalize.TODAY)
+        text = legalize.git("show", f"{v['commit']}:{rel}") if v else p.read_text(encoding="utf-8")
+        bases.append(f"{law} 시행령 {legalize.TODAY} 시행본" + (f"(시행 {v['시행']})" if v else ""))
+        body = text[:text.find("\n## 부칙")] if "\n## 부칙" in text else text
+        law_t = law_titles(law, "법률")
+        heads = list(DECREE_HEAD.finditer(body))
+        pairs: dict = {}
+        for i, h in enumerate(heads):
+            seg = body[h.end(): heads[i + 1].start() if i + 1 < len(heads) else len(body)]
+            for m in LAW_REF.finditer(seg):
+                jo = m.group(1)
+                key = (h.group(1), jo)
+                e = pairs.setdefault(key, {"title": h.group(2).strip(), "count": 0, "kinds": Counter(), "paras": set()})
+                e["count"] += 1
+                e["kinds"][_ref_kind(seg[m.end():])] += 1
+                if m.group(4):
+                    e["paras"].add(m.group(4))
+        for (dj, jo), e in pairs.items():
+            st = ({"status": "verified", "current_title": law_t[0][jo]} if law_t and jo in law_t[0]
+                  else {"status": "not_found" if law_t else "no_source"})
+            kind = next(k for k in ("대통령령 위임", "근거", "참조") if e["kinds"][k])
+            rels.append({"from": {"type": "decree", "law": law, "id": dj, "name": e["title"]},
+                         "to": {"type": "law", "name": law, "kind": "법률", "article": jo,
+                                "title_in_source": st.get("current_title"), "paragraphs": sorted(e["paras"])},
+                         "relation": kind, "mentions": e["count"], "kinds": dict(e["kinds"]), **st})
+    REL_DIR.mkdir(parents=True, exist_ok=True)
+    meta = {"source": "legalize-kr 시행령", "extractor": "decree_delegation",
+            "extracted": datetime.date.today().isoformat(), "legalize": head, "basis": bases,
+            "relation": "대통령령 위임 = 문맥에 '대통령령으로 정하는', 근거 = '…에 따라/의하여', 그 외 참조. 부칙 제외",
+            "status_count": dict(Counter(r["status"] for r in rels)),
+            "relation_count": dict(Counter(r["relation"] for r in rels))}
+    DELEG_FILE.write_text(json.dumps({"_meta": meta, "relations": rels}, ensure_ascii=False, indent=1),
+                          encoding="utf-8")
+    return DELEG_FILE
+
+
+def ensure_delegations(quiet: bool = False) -> None:
+    """위임 관계 파일이 없거나, 추출 당시 legalize-kr 커밋이 지금과 다르면 다시 추출(동기화로 개정이 들어온 경우)."""
+    import legalize
+    if not legalize.REPO.exists():
+        return
+    cur = legalize_state()
+    if DELEG_FILE.exists():
+        old = json.loads(DELEG_FILE.read_text(encoding="utf-8"))["_meta"].get("legalize", "")
+        if old.split(" (")[0] == cur.split(" (")[0]:
+            return
+    import time
+    t0 = time.time()
+    extract_delegations()
+    if not quiet:
+        m = json.loads(DELEG_FILE.read_text(encoding="utf-8"))["_meta"]
+        print(f"🔗 시행령→법률 관계 재추출({cur.split(' (')[0]}): {m['relation_count']} · {m['status_count']} "
+              f"· {time.time() - t0:.0f}초", file=sys.stderr)
+
+
 def extract_auto(md: Path, quiet: bool = False) -> Path | None:
     """맞는 추출기가 있으면 관계를 뽑아 data/relations/<문서>.json에 저장. rag.py ingest가 호출."""
     text = md.read_text(encoding="utf-8", errors="ignore")
@@ -286,19 +369,61 @@ MARK = {"verified": "✅", "title_changed": "⚠️ 제목 다름", "not_found":
         "no_source": "· 원문 미보유", "no_article": "· 조문 없음"}
 
 
+def _jo(jo: str | None) -> str | None:
+    if not jo:
+        return None
+    if jo.startswith("제"):
+        return jo
+    m = re.fullmatch(r"(\d+)(?:의(\d+))?", jo)
+    return f"제{m.group(1)}조" + (f"의{m.group(2)}" if m.group(2) else "") if m else jo
+
+
 def by_law(name: str, jo: str | None = None) -> list[dict]:
+    """이 법령(조문)을 가리키는 관계 전부 — ISMS-P 항목과 시행령 조문. 시행령 관계는 legalize-kr가
+    바뀌었으면 먼저 다시 추출한다(동기화로 개정이 들어온 뒤 첫 조회 때 자동 반영)."""
     typ, std, kind = canon(name)
-    jo = None if not jo else (jo if jo.startswith("제") else f"제{jo}조")
+    if typ == "law":
+        ensure_delegations()
+    jo = _jo(jo)
     return [r for r in load_all()
             if (r["to"]["name"] == std or _norm(r["to"]["name"]) == _norm(name))
             and (not jo or r["to"]["article"] == jo)]
 
 
+def _sort_key(r: dict):
+    fr = r["from"]
+    nums = [int(x) for x in re.findall(r"\d+", fr["id"])]
+    return (fr["type"] != "isms", nums)
+
+
 def fmt(r: dict) -> str:
     to, fr = r["to"], r["from"]
     t = f"{to['name']} {to['article'] or ''}({to['title_in_source'] or ''})".replace("()", "")
+    if fr["type"] == "decree":
+        paras = f" {','.join(to['paragraphs'])}" if to.get("paragraphs") else ""
+        kinds = ", ".join(f"{k} {v}" for k, v in r.get("kinds", {}).items())
+        return (f"{fr['law']} 시행령 {fr['id']}({fr['name']})  →[{r['relation']}]  {t}{paras}  "
+                f"{MARK.get(r['status'], r['status'])}  (언급 {r.get('mentions', 1)}회: {kinds})")
     extra = f" → 현행: {r['current_title']}" if r["status"] == "title_changed" else ""
     return f"ISMS-P {fr['id']} {fr['name']} (p.{fr['page']})  ↔  {t}  {MARK.get(r['status'], r['status'])}{extra}"
+
+
+def print_grouped(hits: list[dict], head: str) -> None:
+    """ISMS-P 항목과 시행령 조문을 나눠 출력(crossmap.py by-law도 사용)."""
+    isms = sorted((r for r in hits if r["from"]["type"] == "isms"), key=_sort_key)
+    dec = sorted((r for r in hits if r["from"]["type"] == "decree"), key=_sort_key)
+    if isms:
+        print(f"=== {head} ← 인증기준 원문에 '관련 법규'로 적힌 항목 {len(isms)}건 (자동 추출) ===")
+        print("    ✅=현행 원문 조문 제목과 일치 · ⚠️ 제목 다름/❌ 없음=인용 전 원문 확인")
+        for r in isms:
+            print("  " + fmt(r))
+    if dec:
+        order = {"대통령령 위임": 0, "근거": 1, "참조": 2}
+        dec.sort(key=lambda r: (order.get(r["relation"], 9), _sort_key(r)))
+        print(f"=== {head} ← 시행령 조문 {len(dec)}건 (자동 추출: 대통령령 위임 > 근거 > 참조) ===")
+        print("    분류는 문장 패턴 추정(같은 쌍의 언급 중 가장 강한 종류). 인용 전 시행령 원문 확인")
+        for r in dec:
+            print("  " + fmt(r))
 
 
 def cmd_extract(a):
@@ -317,9 +442,9 @@ def cmd_check(a):
 
 def cmd_by_law(a):
     hits = by_law(a.name, a.jo)
-    print(f"=== {a.name} {a.jo or ''} ← 원문에 '관련 법규'로 적힌 항목 {len(hits)}건 (자동 추출) ===")
-    for r in sorted(hits, key=lambda r: [int(x) for x in r["from"]["id"].split(".")]):
-        print("  " + fmt(r))
+    if not hits:
+        raise SystemExit(f"❌ {a.name} {a.jo or ''}을 가리키는 관계 없음")
+    print_grouped(hits, f"{a.name} {_jo(a.jo) or '(전체)'}")
 
 
 def cmd_by_item(a):
