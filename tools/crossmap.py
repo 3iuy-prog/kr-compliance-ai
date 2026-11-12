@@ -76,7 +76,7 @@ def cmd_search(a):
 def cmd_by_law(a):
     """역매핑: 특정 법령 조항에 매핑된 통제 나열."""
     db = load()
-    jo = a.jo if not a.jo or a.jo.startswith("제") else f"제{a.jo}조"
+    jo = a.jo  # 인자 파싱 단계에서 legalize.norm_jo로 정규화·검증됨
     hits = [c for c in db["controls"]
             if any(l["name"] == a.name and (not jo or l["article"] == jo)
                    for l in c.get("law", []) + c.get("notice", []))]
@@ -153,7 +153,9 @@ def main():
     s.add_argument("query"); s.set_defaults(func=cmd_search)
 
     s = sub.add_parser("by-law", help="법령 조항 역매핑")
-    s.add_argument("name"); s.add_argument("--jo", help="조문 (예: 29, 제29조)")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import legalize
+    s.add_argument("name"); s.add_argument("--jo", type=legalize.jo_arg, help="조문 (예: 29, 제29조, 21의3). " + legalize.JO_FORMS)
     s.set_defaults(func=cmd_by_law)
 
     s = sub.add_parser("isms", help="ISMS-P 항목 조회(L3)")

@@ -134,16 +134,28 @@ def frontmatter(text: str) -> dict:
     return fm
 
 
+JO_FORMS = "허용 형식: 21, 21조, 제21, 제21조, 21의3, 21조의3, 제21의3, 제21조의3 (항·호는 넣지 않는다)"
+_JO_RE = re.compile(r"(?:제)?([1-9]\d*)(?:조)?(?:의([1-9]\d*))?")
+
+
 def norm_jo(jo: str) -> str:
-    """조문 번호 정규화: '21'→'제21조', '37의2'→'제37조의2', '제37조의2'→그대로."""
-    jo = jo.strip()
-    if not jo.startswith("제"):
-        jo = "제" + jo
-    if "조" not in jo:  # '제21' / '제37의2' 처럼 '조' 누락 시 삽입
-        m = re.match(r"제(\d+)(의\d+)?$", jo)
-        if m:
-            jo = f"제{m.group(1)}조{m.group(2) or ''}"
-    return jo
+    """조문 번호를 '제N조' 또는 '제N조의M'으로 정규화한다. 형식이 맞지 않으면 ValueError.
+
+    crossmap.py·relations.py도 이 함수를 쓴다. 잘못된 형식을 그대로 넘겨 '조회 결과 없음'으로
+    끝나지 않도록, 형식 오류는 조회 전에 실패시킨다.
+    """
+    m = _JO_RE.fullmatch(jo.strip()) if isinstance(jo, str) else None
+    if not m:
+        raise ValueError(f"조문 번호 형식 오류: {jo!r} — {JO_FORMS}")
+    return f"제{m.group(1)}조" + (f"의{m.group(2)}" if m.group(2) else "")
+
+
+def jo_arg(value: str) -> str:
+    """argparse type: 형식 오류면 인자 파싱 단계에서 종료 코드 2로 실패(동기화·조회 전)."""
+    try:
+        return norm_jo(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
 
 
 def extract_article(text: str, jo: str) -> str | None:
@@ -333,9 +345,6 @@ def main():
     for s in (sys.stdout, sys.stderr):
         if hasattr(s, "reconfigure"):
             s.reconfigure(encoding="utf-8", errors="replace")
-    if not REPO.exists():
-        raise SystemExit(f"❌ vendor/legalize-kr 없음. 먼저 clone 필요:\n"
-                         f"   git clone https://github.com/legalize-kr/legalize-kr {REPO}")
     ap = argparse.ArgumentParser(description="legalize-kr 연동 헬퍼")
     ap.add_argument("--no-sync", action="store_true",
                     help="원격 최신 여부 확인 생략 (오프라인/속도 우선 시)")
@@ -347,7 +356,7 @@ def main():
 
     s = sub.add_parser("show", help="법령/조문 조회")
     s.add_argument("name"); s.add_argument("--kind", default="법률", choices=KINDS)
-    s.add_argument("--jo", help="조문 번호 (예: 21, 제21조)")
+    s.add_argument("--jo", type=jo_arg, help="조문 번호 (예: 21, 제21조, 21의3). " + JO_FORMS)
     s.add_argument("--as-of", dest="as_of", metavar="YYYY-MM-DD",
                    help="그 날짜에 시행 중이던 버전 조회 (기본: 최신 공포본, 시행 전이면 경고)")
     s.add_argument("--limit", type=int, default=3000)
@@ -368,7 +377,10 @@ def main():
     s.add_argument("--detail", type=int, default=0, help="개정 조문 상세 N건 표시")
     s.set_defaults(func=cmd_analyze)
 
-    a = ap.parse_args()
+    a = ap.parse_args()  # 인자 형식 오류(예: --jo)는 여기서 종료 코드 2로 끝난다 — 저장소 확인·동기화 전
+    if not REPO.exists():
+        raise SystemExit(f"❌ vendor/legalize-kr 없음. 먼저 clone 필요:\n"
+                         f"   git clone https://github.com/legalize-kr/legalize-kr {REPO}")
     if a.cmd != "sync" and not a.no_sync:
         sync()
     a.func(a)
