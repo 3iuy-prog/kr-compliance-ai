@@ -370,21 +370,20 @@ MARK = {"verified": "✅", "title_changed": "⚠️ 제목 다름", "not_found":
 
 
 def _jo(jo: str | None) -> str | None:
-    if not jo:
+    """None(생략)은 전체 조회. 값이 있으면 legalize.norm_jo로 정규화하고, 형식 오류면 ValueError."""
+    if jo is None:
         return None
-    if jo.startswith("제"):
-        return jo
-    m = re.fullmatch(r"(\d+)(?:의(\d+))?", jo)
-    return f"제{m.group(1)}조" + (f"의{m.group(2)}" if m.group(2) else "") if m else jo
+    import legalize
+    return legalize.norm_jo(jo)
 
 
 def by_law(name: str, jo: str | None = None) -> list[dict]:
     """이 법령(조문)을 가리키는 관계 전부 — ISMS-P 항목과 시행령 조문. 시행령 관계는 legalize-kr가
     바뀌었으면 먼저 다시 추출한다(동기화로 개정이 들어온 뒤 첫 조회 때 자동 반영)."""
+    jo = _jo(jo)  # 형식 오류는 관계 재추출(파일 변경) 전에 실패
     typ, std, kind = canon(name)
     if typ == "law":
         ensure_delegations()
-    jo = _jo(jo)
     return [r for r in load_all()
             if (r["to"]["name"] == std or _norm(r["to"]["name"]) == _norm(name))
             and (not jo or r["to"]["article"] == jo)]
@@ -469,7 +468,9 @@ def main():
     s = sub.add_parser("extract"); s.add_argument("md"); s.set_defaults(func=cmd_extract)
     s = sub.add_parser("check", help="항목 인식 정합성(번호 빈칸·칸 중복·기준 목록)")
     s.add_argument("md"); s.set_defaults(func=cmd_check)
-    s = sub.add_parser("by-law"); s.add_argument("name"); s.add_argument("--jo"); s.set_defaults(func=cmd_by_law)
+    import legalize
+    s = sub.add_parser("by-law"); s.add_argument("name")
+    s.add_argument("--jo", type=legalize.jo_arg, help=legalize.JO_FORMS); s.set_defaults(func=cmd_by_law)
     s = sub.add_parser("by-item"); s.add_argument("code"); s.set_defaults(func=cmd_by_item)
     sub.add_parser("list").set_defaults(func=cmd_list)
     a = ap.parse_args(); a.func(a)
