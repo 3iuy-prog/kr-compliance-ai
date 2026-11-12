@@ -39,7 +39,7 @@ flowchart TB
 
 ### STEP 1. 저장소 준비
 ```bash
-git clone https://github.com/3iuy-prog/kr-compliance-ai ~/workspace/kr-compliance-ai && cd ~/workspace/kr-compliance-ai
+git clone https://github.com/3iuy-prog/law-assist ~/workspace/law-assist && cd ~/workspace/law-assist
 python3 -m pip install --user -r requirements.txt      # pypdf (RAG용)
 python3 -m pip install --user sentence-transformers    # (선택) RAG 의미검색 — 약 3GB + 모델 2.3GB
 python3 -m pip install --user docling                  # (선택·권장) PDF → Markdown 변환(tools/pdf2md.py)
@@ -50,7 +50,7 @@ ln -s "$PWD/skills/kb-table-verify" ~/.claude/skills/kb-table-verify            
 echo "export COMPLIANCE_AI_HOME=\"$PWD\"" >> ~/.zshrc && source ~/.zshrc                              # 스킬이 저장소 도구를 찾는 경로 (bash면 ~/.bashrc)
 ```
 > 스킬은 홈에 심볼릭 링크로 등록되므로 **어느 디렉터리에서 `claude`를 열어도** `/legal-answer`를 쓸 수 있습니다.
-> 스킬은 `COMPLIANCE_AI_HOME`로 저장소의 도구를 절대경로 호출합니다. 위 `echo` 줄이 clone 위치를 영구 등록하며, 미설정 시에는 `~/workspace/kr-compliance-ai`를 가정합니다.
+> 스킬은 `COMPLIANCE_AI_HOME`로 저장소의 도구를 절대경로 호출합니다. 위 `echo` 줄이 clone 위치를 영구 등록하며, 미설정 시에는 `~/workspace/law-assist`를 가정합니다.
 
 ### STEP 2. 법령 데이터 받기 (legalize-kr)
 개정이력·diff 기능(P3)에 쓰이는 데이터입니다. 약 677MB(전체 Git 히스토리)입니다.

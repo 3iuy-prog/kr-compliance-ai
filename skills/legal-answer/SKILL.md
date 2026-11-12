@@ -10,11 +10,11 @@ description: 법률/컴플라이언스 질의에 표준 형식으로 답한다. 
 ## 도구 위치 (cwd 무관)
 
 이 스킬은 홈(`~/.claude/skills/legal-answer` → 저장소 `skills/legal-answer` 심볼릭 링크)에 등록돼 어느 디렉터리에서든 쓰인다.
-로컬 도구(`legalize.py` `crossmap.py` `rag.py` `kb_add.py`)는 kr-compliance-ai 저장소에 있고 `__file__` 기준으로 데이터를 찾으므로 **어디서 실행하든 절대경로로 호출**하면 된다.
+로컬 도구(`legalize.py` `crossmap.py` `rag.py` `kb_add.py`)는 law-assist 저장소에 있고 `__file__` 기준으로 데이터를 찾으므로 **어디서 실행하든 절대경로로 호출**하면 된다.
 
-- 저장소 루트 = 환경변수 `COMPLIANCE_AI_HOME`. 미설정이면 `$HOME/workspace/kr-compliance-ai`.
+- 저장소 루트 = 환경변수 `COMPLIANCE_AI_HOME`. 미설정이면 `$HOME/workspace/law-assist`.
 - Bash 호출 간 셸 변수가 유지되지 않으므로 **도구 명령마다 앞에** 다음을 붙인다:
-  `COMPLIANCE_AI_HOME="${COMPLIANCE_AI_HOME:-$HOME/workspace/kr-compliance-ai}"; python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" show 개인정보보호법 --jo 29`
+  `COMPLIANCE_AI_HOME="${COMPLIANCE_AI_HOME:-$HOME/workspace/law-assist}"; python3 "$COMPLIANCE_AI_HOME/tools/legalize.py" show 개인정보보호법 --jo 29`
 - 아래 본문의 `python3 "$COMPLIANCE_AI_HOME/tools/…"` 표기는 모두 이 프리픽스를 전제로 한다.
 - 저장소 경로가 없으면 로컬 도구 대신 법령 MCP만 쓰고, 그것도 없으면 "미확인".
 

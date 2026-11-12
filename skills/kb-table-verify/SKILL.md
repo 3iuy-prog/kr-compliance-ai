@@ -10,7 +10,7 @@ PDF를 Markdown으로 바꿀 때(tools/pdf2md.py, docling) 병합 셀·다단 �
 이 스킬은 원본 PDF 페이지를 **이미지로 보고** 표 구조를 대조한다.
 
 ## 도구 위치
-legal-answer 스킬과 같다. 저장소 루트 = `COMPLIANCE_AI_HOME`(미설정이면 `$HOME/workspace/kr-compliance-ai`).
+legal-answer 스킬과 같다. 저장소 루트 = `COMPLIANCE_AI_HOME`(미설정이면 `$HOME/workspace/law-assist`).
 원본 PDF는 `data/kb_src/<문서>.pdf`, 변환본은 같은 이름의 `.md`.
 
 ## 언제 쓰나
