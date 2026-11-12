@@ -32,8 +32,8 @@
 - 엔진: [tools/legalize.py](../tools/legalize.py) `analyze` (Git blob 비교, 외부의존 없음)
   ```bash
   python3 tools/legalize.py history 개인정보보호법                  # 개정일 확인
-  python3 tools/legalize.py analyze 개인정보보호법 --at 2023-03-14 --detail 5
-  # → 신설 19 · 삭제 9 · 개정 52, 조문 목록 + 신설 조항 상세
+  python3 tools/legalize.py analyze 개인정보보호법 --at 2026-03-10 --detail 5
+  # → 신설 1 · 삭제 0 · 개정 18, 조문 목록 + 신설 조항 상세 (2026-11-12 확인)
   ```
 - 파이프라인(스킬 AMENDMENT): `history` → `analyze` → crossmap 역매핑으로 영향 통제 도출 → 대응 체크리스트.
 
@@ -43,8 +43,8 @@
 - AMENDMENT → `legalize.py history/analyze`
 - 법령 원문(로컬 대안) → `legalize.py show`
 
-## 검증 상태 (2026-07-15)
-- [x] P3 analyze: 개인정보보호법 2023-03-14 개정 구조화 확인
-- [x] P2 crossmap: lookup/by-law/search 동작, 법령 앵커 5건 원문 대조
+## 검증 상태 (2026-11-12)
+- [x] P3 analyze: 개인정보보호법 2026-03-10 개정 구조화 확인(신설 제30조의3, 개정 18개 조)
+- [x] P2 crossmap: lookup/by-law 동작, `validate` 8/8 일치, 법령 앵커 5건 원문 대조
 - [x] 스킬에 도구 호출 명시
 - [ ] (다음) analyze/crossmap 출력을 LLM이 최종 리포트로 가공하는 실제 세션 시연
