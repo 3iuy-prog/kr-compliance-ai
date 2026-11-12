@@ -104,13 +104,13 @@ MCP는 법제처 Open API 인증키(`OC`)가 필요하다. **직접 발급해야
 
 ### T4. 개정 영향 (P3)
 ```
-안전성확보조치 기준 2025-10-31 개정에서 인터넷망 차단 관련 변경점과 대응 체크리스트를 정리해줘.
+안전성확보조치 기준 제2026-9호(2026-07-01 일부개정)의 변경점과 대응 체크리스트를 정리해줘. 2027-01-01부터 시행되는 조문은 따로 표시해줘.
 ```
-기대: 개정 전후 비교(legalize-kr Git diff 연동) → 변경 요약 + 체크리스트.
+기대: 행정규칙 신구 조문 비교(MCP) + 안내서 2026.11판 RAG → 변경 요약 + 체크리스트, 부칙의 시행일 차이 표시. (고시는 legalize-kr에 없으므로 Git diff가 아니라 MCP로 비교)
 
-## 현재 상태 (2026-08-03)
+## 현재 상태 (2026-11-12)
 
-- [x] `.mcp.json` — 로컬 stdio 방식(방법 A)으로 전환
+- [x] `.mcp.json` — 로컬 stdio 방식(방법 A), `korean-law-mcp@latest` (npm 최신 4.15.23)
 - [x] `LAW_OC` 발급·등록 (`.env` + `.claude/settings.local.json`)
-- [x] 연결 확인 — `claude mcp list` ✔ Connected, `korean-law-mcp@4.9.2`
-- [x] 실쿼리 검증 3/3 — `get_law_text`(제29조) · `search_decisions` · `get_decision_text`(대법원 2022두68923 판례 본문)
+- [x] 도구 10개 노출 확인(위 '제공 도구'와 동일)
+- [x] 실쿼리 검증 — `search_law`·`get_law_text`(개인정보보호법 제29조)

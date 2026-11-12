@@ -53,7 +53,7 @@ echo "export COMPLIANCE_AI_HOME=\"$PWD\"" >> ~/.zshrc && source ~/.zshrc        
 > 스킬은 `COMPLIANCE_AI_HOME`로 저장소의 도구를 절대경로 호출합니다. 위 `echo` 줄이 clone 위치를 영구 등록하며, 미설정 시에는 `~/workspace/law-assist`를 가정합니다.
 
 ### STEP 2. 법령 데이터 받기 (legalize-kr)
-개정이력·diff 기능(P3)에 쓰이는 데이터입니다. 약 677MB(전체 Git 히스토리)입니다.
+개정이력·diff 기능(P3)에 쓰이는 데이터입니다. 약 1GB(전체 Git 히스토리, 2026-11 기준)입니다.
 ```bash
 git clone https://github.com/legalize-kr/legalize-kr vendor/legalize-kr
 ```
@@ -81,7 +81,7 @@ git clone https://github.com/legalize-kr/legalize-kr vendor/legalize-kr
 ```
 /legal-answer 개인정보보호법상 개인정보 유출 통지는 며칠 이내에 해야 하나?
 /legal-answer '접근권한 최소화' 통제에 관련되는 법령과 ISMS-P 인증기준을 매핑해줘
-/legal-answer 개인정보보호법 2023-03-14 개정으로 뭐가 바뀌었고 우리가 뭘 대응해야 하나?
+/legal-answer 개인정보보호법 2026-03-10 개정으로 뭐가 바뀌었고, 시행일별로 우리가 뭘 대응해야 하나?
 ```
 질의 유형에 따라 자동으로 흐름이 갈립니다.
 
@@ -114,7 +114,7 @@ python3 tools/rag.py search "<질의>" --collection <이름> -k 5
 
 | 도구 | 용도 | 예시 |
 |---|---|---|
-| [tools/legalize.py](tools/legalize.py) | 법령 조회·개정이력·diff | `python3 tools/legalize.py show 개인정보보호법 --jo 29 --as-of 2026-07-16` |
+| [tools/legalize.py](tools/legalize.py) | 법령 조회·개정이력·diff | `python3 tools/legalize.py show 개인정보보호법 --jo 29 --as-of "$(date +%F)"` |
 | [tools/crossmap.py](tools/crossmap.py) | 통제↔법령 크로스매핑 | `python3 tools/crossmap.py by-law 개인정보보호법 --jo 29` |
 | [tools/pdf2md.py](tools/pdf2md.py) | PDF → Markdown(표·쪽 표시 유지, 원문 대조) | `python3 tools/pdf2md.py data/kb_src/안내서.pdf` |
 | [tools/relations.py](tools/relations.py) | 인그레스트 시 관계 추출(ISMS-P 관련 법규)·역방향 조회 | `python3 tools/relations.py by-item 2.9.4` |
